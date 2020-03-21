@@ -15,9 +15,8 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QWidget,
     QStyleOptionGraphicsItem)
-from PyQt5.QtGui import QPainter, QMouseEvent, QColor
-from PyQt5.QtCore import QRectF
-
+from PyQt5.QtGui import QPainter, QMouseEvent, QKeyEvent, QColor
+from PyQt5.QtCore import QRectF, Qt
 
 class MyCanvas(QGraphicsView):
     """
@@ -41,6 +40,12 @@ class MyCanvas(QGraphicsView):
         self.status = ''
         """ 当前绘制状态：无任务/正在绘制Line/... """
 
+        self.is_drawing = False
+        """ 当前绘制状态：是否某个图元正绘制一半 """
+
+        self.is_editing = False
+        """ 当前状态：是否正在编辑图元 """
+
         self.temp_algorithm = ''
         """ 当前绘制的一个图形所采用的算法，随图形的绘制而更新 """
 
@@ -50,21 +55,22 @@ class MyCanvas(QGraphicsView):
         self.temp_item = None
         """ 当前绘制的一个图形图元，随图形的绘制而更新 """
 
-    def start_draw_line(self, algorithm, item_id):
+    def start_draw_line(self, algorithm):
+        """ 开始绘制直线，更改当前状态为直线绘制中 """
         self.status = 'line'
         self.temp_algorithm = algorithm
-        self.temp_id = item_id
-
-    def finish_draw(self):
-        self.temp_id = self.main_window.get_id()
 
     def clear_selection(self):
+        """ 清空所选图元 """
         if self.selected_id != '':
             self.item_dict[self.selected_id].selected = False
+            self.item_dict[self.selected_id].update()
             self.selected_id = ''
+            self.updateScene([self.sceneRect()])
 
     def selection_changed(self, selected):
-        self.main_window.statusBar().showMessage('图元选择： %s' % selected)
+        """ 更改所选图元 """
+        self.main_window.statusBar().showMessage('图元选择： %s  (Ctrl+T[Win]/Cmd+T[Mac]进入编辑模式)' % selected)
         if self.selected_id != '':
             self.item_dict[self.selected_id].selected = False
             self.item_dict[self.selected_id].update()
@@ -75,16 +81,40 @@ class MyCanvas(QGraphicsView):
         self.updateScene([self.sceneRect()])
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
-        pos = self.mapToScene(event.localPos().toPoint())
-        x = int(pos.x())
-        y = int(pos.y())
-        if self.status == 'line':
-            self.temp_item = MyItem(self.temp_id, self.status, [[x, y], [x, y]], self.temp_algorithm)
-            self.scene().addItem(self.temp_item)
+        """ 按下鼠标时的动作 """
+        if event.button() == Qt.LeftButton:
+            # 左键：开始绘制，或选择图元
+            pos = self.mapToScene(event.localPos().toPoint())
+            x = int(pos.x())
+            y = int(pos.y())
+            if self.status == '':
+                # 空闲状态
+                if not self.is_editing:
+                    # 选择图元（非编辑模式）
+                    for item in self.item_dict.values():
+                        if item.judge_select((x, y)):
+                            self.selection_changed(item.id)
+                            select_items = self.list_widget.findItems(item.id, Qt.MatchExactly)
+                            if select_items:
+                                self.list_widget.setCurrentItem(select_items[0])
+            elif self.status == 'line':
+                # 直线绘制状态 --> 选定一个端点
+                self.is_drawing = True
+                self.temp_id = 'Line' + str(self.main_window.get_item_num())
+                self.temp_item = MyItem(self.temp_id, self.status, [(x, y), (x, y)], self.temp_algorithm)
+                self.scene().addItem(self.temp_item)
+        elif event.button() == Qt.RightButton:
+            # 右键：停止绘制并取消一切选择(非编辑模式)
+            if not self.is_drawing and not self.is_editing:
+                self.main_window.statusBar().showMessage('空闲')
+                self.list_widget.clearSelection()
+                self.clear_selection()
+                self.status = ''
         self.updateScene([self.sceneRect()])
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        """ 鼠标移动时的动作 """
         pos = self.mapToScene(event.localPos().toPoint())
         x = int(pos.x())
         y = int(pos.y())
@@ -94,11 +124,33 @@ class MyCanvas(QGraphicsView):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        if self.status == 'line':
-            self.item_dict[self.temp_id] = self.temp_item
-            self.list_widget.addItem(self.temp_id)
-            self.finish_draw()
+        """ 释放鼠标时的动作 """
+        if event.button() == Qt.LeftButton:
+            if self.status == 'line':
+                self.item_dict[self.temp_id] = self.temp_item
+                self.list_widget.addItem(self.temp_id)
+                self.is_drawing = False
+        self.updateScene([self.sceneRect()])
         super().mouseReleaseEvent(event)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        """ 一些键盘指令 """
+        if event.key() == Qt.Key_T and QApplication.keyboardModifiers() == Qt.ControlModifier:
+            # Ctrl + T (Win) / Command + T (Mac): 编辑当前选中的图元，编辑模式禁止改变选中的图元
+            if self.status == '' and self.selected_id != '':
+                self.main_window.statusBar().showMessage('图元编辑： %s  (回车退出编辑模式)' % self.selected_id)
+                self.is_editing = True
+                self.item_dict[self.selected_id].editing = True
+                self.list_widget.setDisabled(True)
+        if (event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter) and self.is_editing:
+            # Enter: 停止编辑
+            if self.status == '' and self.selected_id != '':
+                self.main_window.statusBar().showMessage('图元选择： %s  (Ctrl+T[Win]/Cmd+T[Mac]进入编辑模式)' % self.selected_id)
+                self.is_editing = False
+                self.item_dict[self.selected_id].editing = False
+                self.list_widget.setDisabled(False)
+        self.updateScene([self.sceneRect()])
+        super().keyPressEvent(event)
 
 
 class MyItem(QGraphicsItem):
@@ -107,7 +159,6 @@ class MyItem(QGraphicsItem):
     """
     def __init__(self, item_id: str, item_type: str, p_list: list, algorithm: str = '', parent: QGraphicsItem = None):
         """
-
         :param item_id: 图元ID
         :param item_type: 图元类型，'line'、'polygon'、'ellipse'、'curve'等
         :param p_list: 图元参数
@@ -120,15 +171,47 @@ class MyItem(QGraphicsItem):
         self.p_list = p_list        # 图元参数
         self.algorithm = algorithm  # 绘制算法，'DDA'、'Bresenham'、'Bezier'、'B-spline'等
         self.selected = False
+        self.editing = False
+        self.item_pixels = []       # 图元的所有像素点，为列表内元组：[(x1,y1), (x2,y2), ...]
 
     def paint(self, painter: QPainter, option: QStyleOptionGraphicsItem, widget: Optional[QWidget] = ...) -> None:
+        """ 图元绘制，每当update时调用 """
         if self.item_type == 'line':
-            item_pixels = alg.draw_line(self.p_list, self.algorithm)
-            for p in item_pixels:
+            self.item_pixels = alg.draw_line(self.p_list, self.algorithm)
+            for p in self.item_pixels:
                 painter.drawPoint(*p)
             if self.selected:
                 painter.setPen(QColor(255, 0, 0))
-                painter.drawRect(self.boundingRect())
+                if self.editing:
+                    for rect in self.edit_rect():
+                        painter.drawRect(rect)
+                else:
+                    painter.drawRect(self.boundingRect())
+        elif self.item_type == 'polygon':
+            pass
+        elif self.item_type == 'ellipse':
+            pass
+        elif self.item_type == 'curve':
+            pass
+
+    def judge_select(self, press_pos) -> bool:
+        """ 在画布中直接用鼠标选择图元时，判定图元是否被点击 """
+        for p in self.item_pixels:
+            dx = abs(p[0] - press_pos[0])
+            dy = abs(p[1] - press_pos[1])
+            if dx * dx + dy * dy <= 4:
+                return True
+        return False
+
+    def edit_rect(self):
+        if self.item_type == 'line':
+            rect_list = []
+            length = 6
+            x0, y0 = self.p_list[0]
+            x1, y1 = self.p_list[1]
+            rect_list.append(QRectF(x0 - length/2, y0 - length/2, length, length))
+            rect_list.append(QRectF(x1 - length/2, y1 - length/2, length, length))
+            return rect_list
         elif self.item_type == 'polygon':
             pass
         elif self.item_type == 'ellipse':
@@ -137,6 +220,7 @@ class MyItem(QGraphicsItem):
             pass
 
     def boundingRect(self) -> QRectF:
+        """ 图元选择框 """
         if self.item_type == 'line':
             x0, y0 = self.p_list[0]
             x1, y1 = self.p_list[1]
@@ -161,7 +245,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.item_cnt = 0
 
-        # 使用QListWidget来记录已有的图元，并用于选择图元。注：这是图元选择的简单实现方法，更好的实现是在画布中直接用鼠标选择图元
+        # 使用QListWidget来记录已有的图元，并用于选择图元
         self.list_widget = QListWidget(self)
         self.list_widget.setMinimumWidth(200)
 
@@ -215,13 +299,12 @@ class MainWindow(QMainWindow):
         self.resize(600, 600)
         self.setWindowTitle('CG Demo')
 
-    def get_id(self):
-        _id = str(self.item_cnt)
-        self.item_cnt += 1
-        return _id
+    def get_item_num(self):
+        self.item_cnt = self.list_widget.count()
+        return self.item_cnt
 
     def line_naive_action(self):
-        self.canvas_widget.start_draw_line('Naive', self.get_id())
+        self.canvas_widget.start_draw_line('Naive')
         self.statusBar().showMessage('Naive算法绘制线段')
         self.list_widget.clearSelection()
         self.canvas_widget.clear_selection()
