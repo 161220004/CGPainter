@@ -19,15 +19,54 @@ def draw_line(p_list, algorithm):
             for y in range(y0, y1 + 1):
                 result.append((x0, y))
         else:
-            if x0 > x1:
+            if x0 > x1:  # 保证 x0 < x1
                 x0, y0, x1, y1 = x1, y1, x0, y0
             k = (y1 - y0) / (x1 - x0)
             for x in range(x0, x1 + 1):
                 result.append((x, int(y0 + k * (x - x0))))
     elif algorithm == 'DDA':
-        pass
+        dis = max(abs(x1 - x0), abs(y1 - y0))
+        if dis > 0:
+            dx = (x1 - x0) / dis
+            dy = (y1 - y0) / dis
+            x, y = x0, y0
+            for i in range(dis):
+                result.append((round(x), round(y)))
+                x += dx
+                y += dy
     elif algorithm == 'Bresenham':
-        pass
+        # 对于y = mx+b(0<m<1): (xk,yk)的下一个是(1+xk,yk)或(1+xk,1+yk), y = m(1+xk)+b,
+        # dd = d_lower-d_upper = (y-yk)-((1+yk)-y) = 2m(1+xk)-2yk+2b-1, >0 则绘制上方像素(+1), <0 则绘制下方像素(0)
+        # m = dy/dx > 0, p0 = 2 * dy - dx, pk=dx*dd=2*dy*xk-2*dx*yk+c, p(k+1)= pk + 2 * dy - 2 * dx * (y(k+1) - yk)
+        # 当 pk > 0, y(k+1) - yk = 1, p(k+1)= pk + 2 * dy - 2 * dx; 当 pk < 0, y(k+1) - yk = 0, p(k+1)= pk + 2 * dy
+        # 同理，对于y = mx+b(-1<m<0)： (xk,yk)的下一个是(1+xk,-1+yk)或(1+xk,yk)
+        # dd = d_upper-d_lower = (yk-y)-(y-(-1+yk)) = 2yk-2m(1+xk)-2b-1, >0 则绘制下方像素(-1), <0 则绘制上方像素(0)
+        # m = dy/dx < 0, p0 = -2 * dy - dx, pk=dx*dd=-2*dy*xk+2*dx*yk+c, p(k+1)= pk - 2 * dy + 2 * dx * (y(k+1) - yk)
+        # 当 pk > 0, y(k+1) - yk = -1, p(k+1)= pk - 2 * dy - 2 * dx; 当 pk < 0, y(k+1) - yk = 0, p(k+1)= pk - 2 * dy
+        # 综上，令 sign_y = dy/abs(dy), dx = abs(ds), dy = abs(dy), 总有：
+        # p0 = 2 * dy - dx, p(k+1)= pk + 2 * dy - 2 * dx (pk > 0, y(k+1) = yk + sign_y), p(k+1)= pk + 2 * dy (pk < 0)
+        dx = abs(x1 - x0)
+        dy = abs(y1 - y0)
+        is_swapped = False
+        if dx < dy:
+            is_swapped = True
+            x0, x1, dx, y0, y1, dy = y0, y1, dy, x0, x1, dx
+        # sign 必须放在交换之后计算
+        sign_x = (1 if x1 > x0 else (-1))
+        sign_y = (1 if y1 > y0 else (-1))
+        x, y = x0, y0
+        p = 2 * dy - dx
+        for i in range(dx):
+            if is_swapped:
+                result.append((y, x))
+            else:
+                result.append((x, y))
+            x += sign_x
+            if p < 0:
+                p += 2 * dy
+            else:
+                y += sign_y
+                p += 2 * (dy - dx)
     return result
 
 
