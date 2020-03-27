@@ -81,7 +81,7 @@ class MyCanvas(QGraphicsView):
 
     def clear_selection(self):
         """ 清空所选图元 """
-        if self.selected_id != '':
+        if self.selected_id != '' and len(self.item_dict) > 0:
             self.item_dict[self.selected_id].selected = False
             self.item_dict[self.selected_id].update()
             self.selected_id = ''
@@ -96,7 +96,15 @@ class MyCanvas(QGraphicsView):
         self.selected_id = selected
         self.item_dict[selected].selected = True
         self.item_dict[selected].update()
+                self.item_dict[self.selected_id].update()
         self.status = ''
+        self.is_drawing = False
+        self.is_editing = False
+        self.temp_algorithm = ''
+        self.temp_id = ''
+        self.temp_item = None
+        self.temp_poly_vnum = 0
+        self.temp_poly_v = 0
         self.updateScene([self.sceneRect()])
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
@@ -112,7 +120,6 @@ class MyCanvas(QGraphicsView):
                     # 选择图元（非编辑模式）
                     for item in self.item_dict.values():
                         if item.judge_select((x, y)):
-                            self.selection_changed(item.id)
                             select_items = self.list_widget.findItems(item.id, Qt.MatchExactly)
                             if select_items:
                                 self.list_widget.setCurrentItem(select_items[0])
@@ -350,6 +357,7 @@ class MainWindow(QMainWindow):
         clip_liang_barsky_act = clip_menu.addAction('Liang-Barsky')
 
         # 连接信号和槽函数
+        reset_canvas_act.triggered.connect(self.reset_action)
         exit_act.triggered.connect(qApp.quit)
         line_naive_act.triggered.connect(self.line_naive_action)
         line_dda_act.triggered.connect(self.line_dda_action)
@@ -373,6 +381,11 @@ class MainWindow(QMainWindow):
     def get_item_num(self):
         self.item_cnt = self.list_widget.count()
         return self.item_cnt
+
+    def reset_action(self):
+        self.statusBar().showMessage('空闲')
+        self.list_widget.clear()
+        self.canvas_widget.reset_all()
 
     def line_naive_action(self):
         self.canvas_widget.start_draw_line('Naive')
