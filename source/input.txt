@@ -1,7 +1,20 @@
-resetCanvas 600 500
+resetCanvas 600 600
 setColor 0 255 0
-drawLine line1 100 50 500 200 Naive
-saveCanvas 1
+drawLine line1 0 0 500 250 DDA
 setColor 255 0 0
-drawLine 666 200 300 400 150 Naive
+drawLine line2 500 250 250 500 Bresenham
+saveCanvas 1
+resetCanvas 600 600
+setColor 0 0 255
+drawPolygon polygon1 100 100 500 500 100 500 DDA
 saveCanvas 2
+resetCanvas 600 600
+drawPolygon polygon2 200 100 300 100 350 200 300 300 200 300 150 200 Bresenham
+saveCanvas 3
+resetCanvas 600 600
+setColor 0 255 0
+drawEllipse ellipse1 100 100 500 400
+setColor 255 0 0
+drawEllipse ellipse2 130 181 339 234
+drawEllipse ellipse3 204 332 377 403
+saveCanvas 4

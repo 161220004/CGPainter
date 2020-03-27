@@ -11,9 +11,10 @@ from PyQt5.QtWidgets import (
     QGraphicsScene,
     QGraphicsView,
     QGraphicsItem,
+    QWidget,
     QListWidget,
     QHBoxLayout,
-    QWidget,
+    QInputDialog,
     QStyleOptionGraphicsItem)
 from PyQt5.QtGui import QPainter, QMouseEvent, QKeyEvent, QColor
 from PyQt5.QtCore import QRectF, Qt
@@ -55,10 +56,28 @@ class MyCanvas(QGraphicsView):
         self.temp_item = None
         """ 当前绘制的一个图形图元，随图形的绘制而更新 """
 
+        self.temp_poly_vnum = 0
+        """ 当前绘制的如果是多边形，记录顶点数 """
+
+        self.temp_poly_v = 0
+        """ 当前绘制的如果是多边形，记录已经确认的顶点数 """
+
     def start_draw_line(self, algorithm):
         """ 开始绘制直线，更改当前状态为直线绘制中 """
         self.status = 'line'
         self.temp_algorithm = algorithm
+
+    def start_draw_polygon(self, algorithm, vnum):
+        """ 开始绘制多边形，更改当前状态为多边形绘制中 """
+        self.status = 'polygon'
+        self.temp_algorithm = algorithm
+        self.temp_poly_vnum = vnum
+        self.temp_poly_v = 0
+        self.is_drawing = True
+
+    def start_draw_ellipse(self):
+        """ 开始绘制椭圆，更改当前状态为椭圆绘制中 """
+        self.status = 'ellipse'
 
     def clear_selection(self):
         """ 清空所选图元 """
@@ -103,6 +122,31 @@ class MyCanvas(QGraphicsView):
                 self.temp_id = 'Line' + str(self.main_window.get_item_num())
                 self.temp_item = MyItem(self.temp_id, self.status, [(x, y), (x, y)], self.temp_algorithm)
                 self.scene().addItem(self.temp_item)
+            elif self.status == 'ellipse':
+                # 椭圆绘制状态 --> 选定长方形边界的左上角/右下角
+                self.is_drawing = True
+                self.temp_id = 'Ellipse' + str(self.main_window.get_item_num())
+                self.temp_item = MyItem(self.temp_id, self.status, [(x, y), (x, y)], '')
+                self.scene().addItem(self.temp_item)
+            elif self.status == 'polygon':
+                # 多边形绘制状态 --> 确定多边形的一个顶点
+                if self.temp_poly_v == 0:  # 第一个顶点
+                    self.temp_id = 'Polygon' + str(self.main_window.get_item_num())
+                    poly_vs = []
+                    for v in range(self.temp_poly_vnum):
+                        poly_vs.append((x, y))
+                    self.temp_item = MyItem(self.temp_id, self.status, poly_vs, self.temp_algorithm)
+                    self.scene().addItem(self.temp_item)
+                    self.temp_poly_v += 1
+                else:  # 其他顶点
+                    self.temp_item.p_list[self.temp_poly_v] = (x, y)
+                    self.temp_poly_v += 1
+                    if self.temp_poly_v >= self.temp_poly_vnum:  # 所有顶点绘制结束
+                        self.item_dict[self.temp_id] = self.temp_item
+                        self.list_widget.addItem(self.temp_id)
+                        self.is_drawing = False
+                        self.status = ''
+                        self.main_window.statusBar().showMessage('空闲')
         elif event.button() == Qt.RightButton:
             # 右键：停止绘制并取消一切选择(非编辑模式)
             if not self.is_drawing and not self.is_editing:
@@ -118,15 +162,16 @@ class MyCanvas(QGraphicsView):
         pos = self.mapToScene(event.localPos().toPoint())
         x = int(pos.x())
         y = int(pos.y())
-        if self.status == 'line':
-            self.temp_item.p_list[1] = [x, y]
+        if self.status == 'line' or self.status == 'ellipse':
+            self.temp_item.p_list[1] = (x, y)
         self.updateScene([self.sceneRect()])
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         """ 释放鼠标时的动作 """
         if event.button() == Qt.LeftButton:
-            if self.status == 'line':
+            if self.status == 'line' or self.status == 'ellipse':
+                # 完成一个直线/椭圆的绘制
                 self.item_dict[self.temp_id] = self.temp_item
                 self.list_widget.addItem(self.temp_id)
                 self.is_drawing = False
@@ -173,26 +218,29 @@ class MyItem(QGraphicsItem):
         self.selected = False
         self.editing = False
         self.item_pixels = []       # 图元的所有像素点，为列表内元组：[(x1,y1), (x2,y2), ...]
+        self.rect_dict = {}         # 图元的可编辑锚点
 
     def paint(self, painter: QPainter, option: QStyleOptionGraphicsItem, widget: Optional[QWidget] = ...) -> None:
         """ 图元绘制，每当update时调用 """
         if self.item_type == 'line':
             self.item_pixels = alg.draw_line(self.p_list, self.algorithm)
-            for p in self.item_pixels:
-                painter.drawPoint(*p)
-            if self.selected:
-                painter.setPen(QColor(255, 0, 0))
-                if self.editing:
-                    for rect in self.edit_rect():
-                        painter.drawRect(rect)
-                else:
-                    painter.drawRect(self.boundingRect())
         elif self.item_type == 'polygon':
-            pass
+            self.item_pixels = alg.draw_polygon(self.p_list, self.algorithm)
         elif self.item_type == 'ellipse':
-            pass
+            self.item_pixels = alg.draw_ellipse(self.p_list)
         elif self.item_type == 'curve':
             pass
+        for p in self.item_pixels:
+            painter.drawPoint(*p)
+        if self.selected:
+            if len(self.rect_dict) == 0:
+                self.get_rect_dict()
+            painter.setPen(QColor(255, 0, 0))
+            if self.editing:
+                for rect in self.rect_dict.values():
+                    painter.drawRect(rect)
+            else:
+                painter.drawRect(self.boundingRect())
 
     def judge_select(self, press_pos) -> bool:
         """ 在画布中直接用鼠标选择图元时，判定图元是否被点击 """
@@ -203,25 +251,38 @@ class MyItem(QGraphicsItem):
                 return True
         return False
 
-    def edit_rect(self):
+    def get_rect_dict(self):
+        """ 图元编辑锚点 """
+        length = 6
         if self.item_type == 'line':
-            rect_list = []
-            length = 6
             x0, y0 = self.p_list[0]
             x1, y1 = self.p_list[1]
-            rect_list.append(QRectF(x0 - length/2, y0 - length/2, length, length))
-            rect_list.append(QRectF(x1 - length/2, y1 - length/2, length, length))
-            return rect_list
+            self.rect_dict['00'] = QRectF(x0 - length/2, y0 - length/2, length, length)
+            self.rect_dict['11'] = QRectF(x1 - length/2, y1 - length/2, length, length)
+            self.rect_dict['cc'] = QRectF((x0 + x1 - length) / 2, (y0 + y1 - length) / 2, length, length)
         elif self.item_type == 'polygon':
-            pass
+            xsum, ysum = 0, 0
+            vnum = len(self.p_list)
+            for v in range(vnum):
+                x, y = self.p_list[v]
+                xsum += x
+                ysum += y
+                self.rect_dict[str(v)] = QRectF(x - length/2, y - length/2, length, length)
+            self.rect_dict['cc'] = QRectF(xsum/vnum - length/2, ysum/vnum - length/2, length, length)
         elif self.item_type == 'ellipse':
-            pass
+            x0, y0 = self.p_list[0]
+            x1, y1 = self.p_list[1]
+            self.rect_dict['cc'] = QRectF((x0 + x1 - length) / 2, (y0 + y1 - length) / 2, length, length)
+            self.rect_dict['00'] = QRectF(x0 - length/2, y0 - length/2, length, length)
+            self.rect_dict['01'] = QRectF(x0 - length/2, y1 - length/2, length, length)
+            self.rect_dict['10'] = QRectF(x1 - length/2, y0 - length/2, length, length)
+            self.rect_dict['11'] = QRectF(x1 - length/2, y1 - length/2, length, length)
         elif self.item_type == 'curve':
             pass
 
     def boundingRect(self) -> QRectF:
         """ 图元选择框 """
-        if self.item_type == 'line':
+        if self.item_type == 'line' or self.item_type == 'ellipse':
             x0, y0 = self.p_list[0]
             x1, y1 = self.p_list[1]
             x = min(x0, x1)
@@ -230,9 +291,14 @@ class MyItem(QGraphicsItem):
             h = max(y0, y1) - y
             return QRectF(x - 1, y - 1, w + 2, h + 2)
         elif self.item_type == 'polygon':
-            pass
-        elif self.item_type == 'ellipse':
-            pass
+            xmax, ymax = self.p_list[0]
+            xmin, ymin = self.p_list[0]
+            for (x, y) in self.p_list:
+               xmax = max(x, xmax)
+               ymax = max(y, ymax)
+               xmin = min(x, xmin)
+               ymin = min(y, ymin)
+            return QRectF(xmin - 1, ymin - 1, xmax - xmin + 2, ymax - ymin + 2)
         elif self.item_type == 'curve':
             pass
 
@@ -288,6 +354,9 @@ class MainWindow(QMainWindow):
         line_naive_act.triggered.connect(self.line_naive_action)
         line_dda_act.triggered.connect(self.line_dda_action)
         line_bresenham_act.triggered.connect(self.line_bresenham_action)
+        polygon_dda_act.triggered.connect(self.polygon_dda_action)
+        polygon_bresenham_act.triggered.connect(self.polygon_bresenham_action)
+        ellipse_act.triggered.connect(self.ellipse_action)
         self.list_widget.currentTextChanged.connect(self.canvas_widget.selection_changed)
 
         # 设置主窗口的布局
@@ -320,6 +389,28 @@ class MainWindow(QMainWindow):
     def line_bresenham_action(self):
         self.canvas_widget.start_draw_line('Bresenham')
         self.statusBar().showMessage('Bresenham算法绘制线段')
+        self.list_widget.clearSelection()
+        self.canvas_widget.clear_selection()
+
+    def polygon_dda_action(self):
+        vnum, ok_pressed = QInputDialog.getInt(self, "多边形属性设置", "多边形边数: ", 3, 3, 100, 1)
+        if ok_pressed:
+            self.canvas_widget.start_draw_polygon('DDA', vnum)
+            self.statusBar().showMessage('DDA算法绘制多边形')
+            self.list_widget.clearSelection()
+            self.canvas_widget.clear_selection()
+
+    def polygon_bresenham_action(self):
+        vnum, ok_pressed = QInputDialog.getInt(self, "多边形属性设置", "多边形边数: ", 3, 3, 100, 1)
+        if ok_pressed:
+            self.canvas_widget.start_draw_polygon('Bresenham', vnum)
+            self.statusBar().showMessage('Bresenham算法绘制多边形')
+            self.list_widget.clearSelection()
+            self.canvas_widget.clear_selection()
+
+    def ellipse_action(self):
+        self.canvas_widget.start_draw_ellipse()
+        self.statusBar().showMessage('中点圆生成算法绘制椭圆')
         self.list_widget.clearSelection()
         self.canvas_widget.clear_selection()
 
