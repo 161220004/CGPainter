@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
     QGraphicsItem,
     QWidget,
     QListWidget,
+    QColorDialog,
     QHBoxLayout,
     QInputDialog,
     QStyleOptionGraphicsItem)
@@ -26,41 +27,19 @@ class MyCanvas(QGraphicsView):
     def __init__(self, *args):
         super().__init__(*args)
 
-        self.main_window = None
-        """ 指向应用的主窗口，等待MainWindow类的赋值 """
-
-        self.list_widget = None
-        """ 指向应用的图元清单，等待MainWindow类的赋值 """
-
-        self.item_dict = {}
-        """ 图元列表 """
-
-        self.selected_id = ''
-        """ 当前选中图元的Id """
-
-        self.status = ''
-        """ 当前绘制状态：无任务/正在绘制Line/... """
-
-        self.is_drawing = False
-        """ 当前绘制状态：是否某个图元正绘制一半 """
-
-        self.is_editing = False
-        """ 当前状态：是否正在编辑图元 """
-
-        self.temp_algorithm = ''
-        """ 当前绘制的一个图形所采用的算法，随图形的绘制而更新 """
-
-        self.temp_id = ''
-        """ 当前绘制的一个图形的Id，随图形的绘制而更新 """
-
-        self.temp_item = None
-        """ 当前绘制的一个图形图元，随图形的绘制而更新 """
-
-        self.temp_poly_vnum = 0
-        """ 当前绘制的如果是多边形，记录顶点数 """
-
-        self.temp_poly_v = 0
-        """ 当前绘制的如果是多边形，记录已经确认的顶点数 """
+        self.main_window = None            # 指向应用的主窗口，等待MainWindow类的赋值
+        self.list_widget = None            # 指向应用的图元清单，等待MainWindow类的赋值
+        self.item_dict = {}                # 图元列表
+        self.selected_id = ''              # 当前选中图元的Id
+        self.status = ''                   # 当前绘制状态：无任务/正在绘制Line/...
+        self.is_drawing = False            # 当前绘制状态：是否某个图元正绘制一半
+        self.is_editing = False            # 当前状态：是否正在编辑图元
+        self.temp_color = QColor(0, 0, 0)  # 当前画笔颜色
+        self.temp_algorithm = ''           # 当前绘制的一个图形所采用的算法，随图形的绘制而更新
+        self.temp_id = ''                  # 当前绘制的一个图形的Id，随图形的绘制而更新
+        self.temp_item = None              # 当前绘制的一个图形图元，随图形的绘制而更新
+        self.temp_poly_vnum = 0            # 当前绘制的如果是多边形，记录顶点数
+        self.temp_poly_v = 0               # 当前绘制的如果是多边形，记录已经确认的顶点数
 
     def start_draw_line(self, algorithm):
         """ 开始绘制直线，更改当前状态为直线绘制中 """
@@ -89,14 +68,21 @@ class MyCanvas(QGraphicsView):
 
     def selection_changed(self, selected):
         """ 更改所选图元 """
-        self.main_window.statusBar().showMessage('图元选择： %s  (Ctrl+T[Win]/Cmd+T[Mac]进入编辑模式)' % selected)
-        if self.selected_id != '':
-            self.item_dict[self.selected_id].selected = False
-            self.item_dict[self.selected_id].update()
-        self.selected_id = selected
-        self.item_dict[selected].selected = True
-        self.item_dict[selected].update()
+        if len(self.item_dict) > 0 and selected:
+            self.main_window.statusBar().showMessage('图元选择： %s  (Ctrl+T[Win]/Cmd+T[Mac]进入编辑模式)' % selected)
+            if self.selected_id != '':
+                self.item_dict[self.selected_id].selected = False
                 self.item_dict[self.selected_id].update()
+            self.selected_id = selected
+            self.item_dict[selected].selected = True
+            self.item_dict[selected].update()
+            self.status = ''
+            self.updateScene([self.sceneRect()])
+
+    def reset_all(self):
+        self.clear_selection()
+        self.scene().clear()
+        self.item_dict.clear()
         self.status = ''
         self.is_drawing = False
         self.is_editing = False
@@ -127,13 +113,13 @@ class MyCanvas(QGraphicsView):
                 # 直线绘制状态 --> 选定一个端点
                 self.is_drawing = True
                 self.temp_id = 'Line' + str(self.main_window.get_item_num())
-                self.temp_item = MyItem(self.temp_id, self.status, [(x, y), (x, y)], self.temp_algorithm)
+                self.temp_item = MyItem(self.temp_id, self.status, [(x, y), (x, y)], self.temp_color, self.temp_algorithm)
                 self.scene().addItem(self.temp_item)
             elif self.status == 'ellipse':
                 # 椭圆绘制状态 --> 选定长方形边界的左上角/右下角
                 self.is_drawing = True
                 self.temp_id = 'Ellipse' + str(self.main_window.get_item_num())
-                self.temp_item = MyItem(self.temp_id, self.status, [(x, y), (x, y)], '')
+                self.temp_item = MyItem(self.temp_id, self.status, [(x, y), (x, y)], self.temp_color)
                 self.scene().addItem(self.temp_item)
             elif self.status == 'polygon':
                 # 多边形绘制状态 --> 确定多边形的一个顶点
@@ -142,7 +128,7 @@ class MyCanvas(QGraphicsView):
                     poly_vs = []
                     for v in range(self.temp_poly_vnum):
                         poly_vs.append((x, y))
-                    self.temp_item = MyItem(self.temp_id, self.status, poly_vs, self.temp_algorithm)
+                    self.temp_item = MyItem(self.temp_id, self.status, poly_vs, self.temp_color, self.temp_algorithm)
                     self.scene().addItem(self.temp_item)
                     self.temp_poly_v += 1
                 else:  # 其他顶点
@@ -209,7 +195,7 @@ class MyItem(QGraphicsItem):
     """
     自定义图元类，继承自QGraphicsItem
     """
-    def __init__(self, item_id: str, item_type: str, p_list: list, algorithm: str = '', parent: QGraphicsItem = None):
+    def __init__(self, item_id: str, item_type: str, p_list: list, color: QColor = QColor(0, 0, 0), algorithm: str = '', parent: QGraphicsItem = None):
         """
         :param item_id: 图元ID
         :param item_type: 图元类型，'line'、'polygon'、'ellipse'、'curve'等
@@ -218,14 +204,15 @@ class MyItem(QGraphicsItem):
         :param parent:
         """
         super().__init__(parent)
-        self.id = item_id           # 图元ID
-        self.item_type = item_type  # 图元类型，'line'、'polygon'、'ellipse'、'curve'等
-        self.p_list = p_list        # 图元参数
-        self.algorithm = algorithm  # 绘制算法，'DDA'、'Bresenham'、'Bezier'、'B-spline'等
+        self.id = item_id             # 图元ID
+        self.item_type = item_type    # 图元类型，'line'、'polygon'、'ellipse'、'curve'等
+        self.p_list = p_list          # 图元参数
+        self.algorithm = algorithm    # 绘制算法，'DDA'、'Bresenham'、'Bezier'、'B-spline'等
+        self.color = color            # 画笔颜色
         self.selected = False
         self.editing = False
-        self.item_pixels = []       # 图元的所有像素点，为列表内元组：[(x1,y1), (x2,y2), ...]
-        self.rect_dict = {}         # 图元的可编辑锚点
+        self.item_pixels = []         # 图元的所有像素点，为列表内元组：[(x1,y1), (x2,y2), ...]
+        self.rect_dict = {}           # 图元的可编辑锚点
 
     def paint(self, painter: QPainter, option: QStyleOptionGraphicsItem, widget: Optional[QWidget] = ...) -> None:
         """ 图元绘制，每当update时调用 """
@@ -238,6 +225,7 @@ class MyItem(QGraphicsItem):
         elif self.item_type == 'curve':
             pass
         for p in self.item_pixels:
+            painter.setPen(self.color)
             painter.drawPoint(*p)
         if self.selected:
             if len(self.rect_dict) == 0:
@@ -357,6 +345,7 @@ class MainWindow(QMainWindow):
         clip_liang_barsky_act = clip_menu.addAction('Liang-Barsky')
 
         # 连接信号和槽函数
+        set_pen_act.triggered.connect(self.set_pen_action)
         reset_canvas_act.triggered.connect(self.reset_action)
         exit_act.triggered.connect(qApp.quit)
         line_naive_act.triggered.connect(self.line_naive_action)
@@ -381,6 +370,12 @@ class MainWindow(QMainWindow):
     def get_item_num(self):
         self.item_cnt = self.list_widget.count()
         return self.item_cnt
+
+    def set_pen_action(self):
+        if not self.canvas_widget.is_drawing:
+            color = QColorDialog.getColor()
+            if color.isValid():
+                self.canvas_widget.temp_color = color
 
     def reset_action(self):
         self.statusBar().showMessage('空闲')
