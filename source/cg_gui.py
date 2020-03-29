@@ -130,6 +130,7 @@ class MyCanvas(QGraphicsView):
                         poly_vs.append((x, y))
                     self.temp_item = MyItem(self.temp_id, self.status, poly_vs, self.temp_color, self.temp_algorithm)
                     self.scene().addItem(self.temp_item)
+                    self.setMouseTracking(True)
                     self.temp_poly_v += 1
                 else:  # 其他顶点
                     self.temp_item.p_list[self.temp_poly_v] = (x, y)
@@ -137,6 +138,7 @@ class MyCanvas(QGraphicsView):
                     if self.temp_poly_v >= self.temp_poly_vnum:  # 所有顶点绘制结束
                         self.item_dict[self.temp_id] = self.temp_item
                         self.list_widget.addItem(self.temp_id)
+                        self.setMouseTracking(False)
                         self.is_drawing = False
                         self.status = ''
                         self.main_window.statusBar().showMessage('空闲')
@@ -157,6 +159,8 @@ class MyCanvas(QGraphicsView):
         y = int(pos.y())
         if self.status == 'line' or self.status == 'ellipse':
             self.temp_item.p_list[1] = (x, y)
+        elif self.status == 'polygon':
+            self.temp_item.p_list[self.temp_poly_v] = (x, y)
         self.updateScene([self.sceneRect()])
         super().mouseMoveEvent(event)
 
@@ -195,7 +199,8 @@ class MyItem(QGraphicsItem):
     """
     自定义图元类，继承自QGraphicsItem
     """
-    def __init__(self, item_id: str, item_type: str, p_list: list, color: QColor = QColor(0, 0, 0), algorithm: str = '', parent: QGraphicsItem = None):
+    def __init__(self, item_id: str, item_type: str, p_list: list, color: QColor = QColor(0, 0, 0), algorithm: str = '',
+                 parent: QGraphicsItem = None):
         """
         :param item_id: 图元ID
         :param item_type: 图元类型，'line'、'polygon'、'ellipse'、'curve'等
@@ -209,8 +214,8 @@ class MyItem(QGraphicsItem):
         self.p_list = p_list          # 图元参数
         self.algorithm = algorithm    # 绘制算法，'DDA'、'Bresenham'、'Bezier'、'B-spline'等
         self.color = color            # 画笔颜色
-        self.selected = False
-        self.editing = False
+        self.selected = False         # 图元是否被选中
+        self.editing = False          # 图元是否正在被编辑
         self.item_pixels = []         # 图元的所有像素点，为列表内元组：[(x1,y1), (x2,y2), ...]
         self.rect_dict = {}           # 图元的可编辑锚点
 
