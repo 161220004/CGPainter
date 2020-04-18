@@ -96,7 +96,9 @@ def draw_ellipse(p_list):
     x0, y0 = p_list[0]
     x1, y1 = p_list[1]
     if x0 > x1:  # 保证 x0 < x1
-        x0, y0, x1, y1 = x1, y1, x0, y0
+        x0, x1 = x1, x0
+    if y0 > y1:  # 保证 y0 < y1
+        y0, y1 = y1, y0
     result = []
     xc = (x0 + x1) / 2
     yc = (y0 + y1) / 2

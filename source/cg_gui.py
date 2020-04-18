@@ -34,6 +34,7 @@ class MyCanvas(QGraphicsView):
         self.status = ''                   # 当前绘制状态：无任务/正在绘制Line/...
         self.is_drawing = False            # 当前绘制状态：是否某个图元正绘制一半
         self.is_editing = False            # 当前状态：是否正在编辑图元
+        self.press_pos = (0, 0)            # 点击鼠标时鼠标位置
         self.temp_color = QColor(0, 0, 0)  # 当前画笔颜色
         self.temp_algorithm = ''           # 当前绘制的一个图形所采用的算法，随图形的绘制而更新
         self.temp_id = ''                  # 当前绘制的一个图形的Id，随图形的绘制而更新
@@ -102,8 +103,10 @@ class MyCanvas(QGraphicsView):
             y = int(pos.y())
             if self.status == '':
                 # 空闲状态
-                if not self.is_editing:
-                    # 选择图元（非编辑模式）
+                if self.is_editing:  # 选择锚点（编辑模式）
+                    self.press_pos = (x, y)
+                    self.item_dict[self.selected_id].set_rect_key((x, y))
+                else:  # 选择图元（非编辑模式）
                     for item in self.item_dict.values():
                         if item.judge_select((x, y)):
                             select_items = self.list_widget.findItems(item.id, Qt.MatchExactly)
@@ -153,11 +156,43 @@ class MyCanvas(QGraphicsView):
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
-        """ 鼠标移动时的动作 """
+        """ 鼠标按住后移动时的动作 """
         pos = self.mapToScene(event.localPos().toPoint())
         x = int(pos.x())
         y = int(pos.y())
-        if self.status == 'line' or self.status == 'ellipse':
+        if self.status == '' and self.is_editing:  # 移动锚点（编辑模式）
+            selected_item = self.item_dict[self.selected_id]
+            rect_key = selected_item.edit_rect_key
+            if selected_item.item_type == 'line' or selected_item.item_type == 'polygon':
+                vnum = len(selected_item.p_list)
+                if rect_key < vnum:
+                    selected_item.p_list[rect_key] = (x, y)
+                elif rect_key == vnum:
+                    dx = x - self.press_pos[0]
+                    dy = y - self.press_pos[1]
+                    selected_item.mov_dis = (dx, dy)
+            elif selected_item.item_type == 'ellipse':
+                if rect_key == 0:  # x0, y0
+                    selected_item.p_list[0] = (x, y)
+                elif rect_key == 1:  # x0, y1
+                    y0 = selected_item.p_list[0][1]
+                    x1 = selected_item.p_list[1][0]
+                    selected_item.p_list[0] = (x, y0)
+                    selected_item.p_list[1] = (x1, y)
+                elif rect_key == 2:  # x1, y1
+                    selected_item.p_list[1] = (x, y)
+                elif rect_key == 3:  # x1, y0
+                    x0 = selected_item.p_list[0][0]
+                    y1 = selected_item.p_list[1][1]
+                    selected_item.p_list[0] = (x0, y)
+                    selected_item.p_list[1] = (x, y1)
+                elif rect_key == 4:  # center
+                    dx = x - self.press_pos[0]
+                    dy = y - self.press_pos[1]
+                    selected_item.mov_dis = (dx, dy)
+            elif selected_item.item_type == 'curve':
+                pass
+        elif self.status == 'line' or self.status == 'ellipse':
             self.temp_item.p_list[1] = (x, y)
         elif self.status == 'polygon':
             self.temp_item.p_list[self.temp_poly_v] = (x, y)
@@ -167,7 +202,15 @@ class MyCanvas(QGraphicsView):
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         """ 释放鼠标时的动作 """
         if event.button() == Qt.LeftButton:
-            if self.status == 'line' or self.status == 'ellipse':
+            if self.status == '' and self.is_editing:  # 停止移动锚点（编辑模式）
+                selected_item = self.item_dict[self.selected_id]
+                for v in range(len(selected_item.p_list)):
+                    sx, sy = selected_item.p_list[v]
+                    dx, dy = selected_item.mov_dis
+                    selected_item.p_list[v] = (sx + dx, sy + dy)
+                selected_item.mov_dis = (0, 0)
+                selected_item.edit_rect_key = -1
+            elif self.status == 'line' or self.status == 'ellipse':
                 # 完成一个直线/椭圆的绘制
                 self.item_dict[self.temp_id] = self.temp_item
                 self.list_widget.addItem(self.temp_id)
@@ -184,7 +227,7 @@ class MyCanvas(QGraphicsView):
                 self.is_editing = True
                 self.item_dict[self.selected_id].editing = True
                 self.list_widget.setDisabled(True)
-        if (event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter) and self.is_editing:
+        if self.is_editing and (event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter):
             # Enter: 停止编辑
             if self.status == '' and self.selected_id != '':
                 self.main_window.statusBar().showMessage('图元选择： %s  (Ctrl+T[Win]/Cmd+T[Mac]进入编辑模式)' % self.selected_id)
@@ -218,25 +261,33 @@ class MyItem(QGraphicsItem):
         self.editing = False          # 图元是否正在被编辑
         self.item_pixels = []         # 图元的所有像素点，为列表内元组：[(x1,y1), (x2,y2), ...]
         self.rect_dict = {}           # 图元的可编辑锚点
+        self.edit_rect_key = -1       # 当前如果处于编辑状态，正在编辑的锚点
+        self.mov_dis = (0, 0)         # 当前如果处于编辑状态，图元位移
 
     def paint(self, painter: QPainter, option: QStyleOptionGraphicsItem, widget: Optional[QWidget] = ...) -> None:
         """ 图元绘制，每当update时调用 """
+        p_list_real = []
+        if self.editing:  # 编辑模式，有位移
+            for v in range(len(self.p_list)):
+                x, y = self.p_list[v]
+                p_list_real.append((x + self.mov_dis[0], y + self.mov_dis[1]))
+        else:  # 非编辑模式，直接用p_list
+            p_list_real = self.p_list
         if self.item_type == 'line':
-            self.item_pixels = alg.draw_line(self.p_list, self.algorithm)
+            self.item_pixels = alg.draw_line(p_list_real, self.algorithm)
         elif self.item_type == 'polygon':
-            self.item_pixels = alg.draw_polygon(self.p_list, self.algorithm)
+            self.item_pixels = alg.draw_polygon(p_list_real, self.algorithm)
         elif self.item_type == 'ellipse':
-            self.item_pixels = alg.draw_ellipse(self.p_list)
+            self.item_pixels = alg.draw_ellipse(p_list_real)
         elif self.item_type == 'curve':
             pass
         for p in self.item_pixels:
             painter.setPen(self.color)
             painter.drawPoint(*p)
         if self.selected:
-            if len(self.rect_dict) == 0:
-                self.get_rect_dict()
             painter.setPen(QColor(255, 0, 0))
             if self.editing:
+                self.get_rect_dict()
                 for rect in self.rect_dict.values():
                     painter.drawRect(rect)
             else:
@@ -254,31 +305,37 @@ class MyItem(QGraphicsItem):
     def get_rect_dict(self):
         """ 图元编辑锚点 """
         length = 6
-        if self.item_type == 'line':
-            x0, y0 = self.p_list[0]
-            x1, y1 = self.p_list[1]
-            self.rect_dict['00'] = QRectF(x0 - length/2, y0 - length/2, length, length)
-            self.rect_dict['11'] = QRectF(x1 - length/2, y1 - length/2, length, length)
-            self.rect_dict['cc'] = QRectF((x0 + x1 - length) / 2, (y0 + y1 - length) / 2, length, length)
-        elif self.item_type == 'polygon':
+        if self.item_type == 'line' or self.item_type == 'polygon':
+            # rect_dict 的 0, 1... 分别对应于 p_list的 0, 1...；rect_dict 的 vnum 是中心
             xsum, ysum = 0, 0
             vnum = len(self.p_list)
             for v in range(vnum):
-                x, y = self.p_list[v]
+                x = self.p_list[v][0] + self.mov_dis[0]
+                y = self.p_list[v][1] + self.mov_dis[1]
                 xsum += x
                 ysum += y
-                self.rect_dict[str(v)] = QRectF(x - length/2, y - length/2, length, length)
-            self.rect_dict['cc'] = QRectF(xsum/vnum - length/2, ysum/vnum - length/2, length, length)
+                self.rect_dict[v] = QRectF(x - length/2, y - length/2, length, length)
+            self.rect_dict[vnum] = QRectF(xsum/vnum - length/2, ysum/vnum - length/2, length, length)
         elif self.item_type == 'ellipse':
-            x0, y0 = self.p_list[0]
-            x1, y1 = self.p_list[1]
-            self.rect_dict['cc'] = QRectF((x0 + x1 - length) / 2, (y0 + y1 - length) / 2, length, length)
-            self.rect_dict['00'] = QRectF(x0 - length/2, y0 - length/2, length, length)
-            self.rect_dict['01'] = QRectF(x0 - length/2, y1 - length/2, length, length)
-            self.rect_dict['10'] = QRectF(x1 - length/2, y0 - length/2, length, length)
-            self.rect_dict['11'] = QRectF(x1 - length/2, y1 - length/2, length, length)
+            x0 = self.p_list[0][0] + self.mov_dis[0]
+            y0 = self.p_list[0][1] + self.mov_dis[1]
+            x1 = self.p_list[1][0] + self.mov_dis[0]
+            y1 = self.p_list[1][1] + self.mov_dis[1]
+            # rect_dict 的 0, 1 分别对应于 p_list的 0, 2；rect_dict 的 4 是中心
+            self.rect_dict[0] = QRectF(x0 - length/2, y0 - length/2, length, length)
+            self.rect_dict[1] = QRectF(x0 - length/2, y1 - length/2, length, length)
+            self.rect_dict[2] = QRectF(x1 - length/2, y1 - length/2, length, length)
+            self.rect_dict[3] = QRectF(x1 - length/2, y0 - length/2, length, length)
+            self.rect_dict[4] = QRectF((x0 + x1 - length) / 2, (y0 + y1 - length) / 2, length, length)
         elif self.item_type == 'curve':
             pass
+
+    def set_rect_key(self, press_pos):
+        for key, rect in self.rect_dict.items():
+            if rect.left() <= press_pos[0] <= rect.right() and rect.top() <= press_pos[1] <= rect.bottom():
+                self.edit_rect_key = key
+                return
+        self.edit_rect_key = -1
 
     def boundingRect(self) -> QRectF:
         """ 图元选择框 """

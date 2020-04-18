@@ -15,6 +15,6 @@ resetCanvas 600 600
 setColor 0 255 0
 drawEllipse ellipse1 100 100 500 400
 setColor 255 0 0
-drawEllipse ellipse2 130 181 339 234
+drawEllipse ellipse2 130 181 339 100
 drawEllipse ellipse3 204 332 377 403
 saveCanvas 4
