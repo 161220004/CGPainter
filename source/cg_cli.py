@@ -83,6 +83,11 @@ if __name__ == '__main__':
                 x1 = int(line[4])
                 y1 = int(line[5])
                 item_dict[item_id] = ['ellipse', [(x0, y0), (x1, y1)], '', np.array(pen_color)]
+            elif line[0] == 'translate':
+                item_id = line[1]
+                dx = int(line[2])
+                dy = int(line[3])
+                item_dict[item_id][1] = alg.translate(item_dict[item_id][1], dx, dy)
             ...
             line = fp.readline()
 
