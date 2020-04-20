@@ -94,6 +94,13 @@ if __name__ == '__main__':
                 y = int(line[3])
                 s = float(line[4])
                 item_dict[item_id][1] = alg.scale(item_dict[item_id][1], x, y, s)
+            elif line[0] == 'rotate':
+                item_id = line[1]
+                if item_dict[item_id][0] != 'ellipse':
+                    x = int(line[2])
+                    y = int(line[3])
+                    r = float(line[4])
+                    item_dict[item_id][1] = alg.rotate(item_dict[item_id][1], x, y, r)
             ...
             line = fp.readline()
 

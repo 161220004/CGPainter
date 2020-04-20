@@ -6,7 +6,8 @@ import cg_algorithms as alg
 from typing import Optional
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, qApp, QGraphicsScene, QGraphicsView, QGraphicsItem, QStyleOptionGraphicsItem,
-    QWidget, QListWidget, QColorDialog, QDialog, QInputDialog, QHBoxLayout, QVBoxLayout, QLabel, QLineEdit, QPushButton)
+    QWidget, QListWidget, QColorDialog, QDialog, QInputDialog, QMessageBox,
+    QHBoxLayout, QVBoxLayout, QLabel, QLineEdit, QPushButton)
 from PyQt5.QtGui import QPainter, QMouseEvent, QKeyEvent, QColor, QDoubleValidator, QIntValidator
 from PyQt5.QtCore import QRectF, Qt
 
@@ -57,6 +58,11 @@ class MyCanvas(QGraphicsView):
     def scale_selected_item(self, cx, cy, s):  # 已经确认存在选中的图元了
         selected_item = self.item_dict[self.selected_id]
         selected_item.p_list = alg.scale(selected_item.p_list, cx, cy, s)
+        self.updateScene([self.sceneRect()])
+
+    def rotate_selected_item(self, cx, cy, r):  # 已经确认存在选中的图元了
+        selected_item = self.item_dict[self.selected_id]
+        selected_item.p_list = alg.rotate(selected_item.p_list, cx, cy, r)
         self.updateScene([self.sceneRect()])
 
     def clear_selection(self):
@@ -425,6 +431,7 @@ class MainWindow(QMainWindow):
         polygon_bresenham_act.triggered.connect(self.polygon_bresenham_action)
         ellipse_act.triggered.connect(self.ellipse_action)
         translate_act.triggered.connect(self.translate_action)
+        rotate_act.triggered.connect(self.rotate_action)
         scale_act.triggered.connect(self.scale_action)
         self.list_widget.currentTextChanged.connect(self.canvas_widget.selection_changed)
 
@@ -502,23 +509,46 @@ class MainWindow(QMainWindow):
             x_input, y_input, ok_pressed = TranslateDialog('X方向位移: ', 'Y方向位移: ').get_input()
             if ok_pressed:
                 self.canvas_widget.translate_selected_item(x_input, y_input)
+        else:
+            reply = QMessageBox.warning(self, '注意', '请先选中一个图元', QMessageBox.Yes, QMessageBox.Yes)
 
     def scale_action(self):
         if self.canvas_widget.status == '' and self.canvas_widget.selected_id != '':  # 可缩放
             x_default, y_default = self.canvas_widget.item_dict[self.canvas_widget.selected_id].get_center()
-            x_input, y_input, s_input, ok_pressed = TranslateDialog('X中心: ', 'Y中心: ', True, x_default, y_default).get_input()
+            x_input, y_input, s_input, ok_pressed = TranslateDialog('X中心: ', 'Y中心: ', True, False, x_default, y_default).get_input()
             if ok_pressed:
                 self.canvas_widget.scale_selected_item(x_input, y_input, s_input)
+        else:
+            reply = QMessageBox.warning(self, '注意', '请先选中一个图元', QMessageBox.Yes, QMessageBox.Yes)
+
+    def rotate_action(self):
+        if self.canvas_widget.status == '' and self.canvas_widget.selected_id != '':
+            selected_item = self.canvas_widget.item_dict[self.canvas_widget.selected_id]
+            if selected_item.item_type == 'ellipse':
+                reply = QMessageBox.warning(self, '注意', '椭圆不提供旋转功能', QMessageBox.Yes, QMessageBox.Yes)
+            else:  # 可旋转
+                x_default, y_default = selected_item.get_center()
+                x_input, y_input, r_input, ok_pressed = TranslateDialog('X中心: ', 'Y中心: ', False, True, x_default, y_default).get_input()
+                if ok_pressed:
+                    self.canvas_widget.rotate_selected_item(x_input, y_input, r_input)
+        else:
+            reply = QMessageBox.warning(self, '注意', '请先选中一个图元', QMessageBox.Yes, QMessageBox.Yes)
 
 
 class TranslateDialog(QDialog):  # 继承QDialog类
 
-    def __init__(self, x_text: str, y_text: str, has_scale: bool = False, x_default: int = 0, y_default: int = 0):
+    def __init__(self, x_text: str, y_text: str, has_scale: bool = False, has_angle: bool = False, x_default: int = 0, y_default: int = 0):
         super().__init__()
         self.setWindowModality(Qt.ApplicationModal)  # 设置窗口为模态，用户只有关闭弹窗后，才能关闭主界面
-        self.setWindowTitle('平移')
+        title_str = '平移'
+        if has_scale:
+            title_str = '缩放'
+        elif has_angle:
+            title_str = '旋转'
+        self.setWindowTitle(title_str)
         self.resize(200, 100)
         self.has_scale = has_scale
+        self.has_angle = has_angle
         int_validator = QIntValidator(self)  # 只接收整数(1000~1000)
         int_validator.setRange(-9999, 9999)
         double_validator = QDoubleValidator(self)  # 只接收浮点数(0~100)
@@ -543,6 +573,12 @@ class TranslateDialog(QDialog):  # 继承QDialog类
         self.s_inputline.setValidator(double_validator)  # 只接收浮点数
         hbox_s_layout.addWidget(s_label)
         hbox_s_layout.addWidget(self.s_inputline)
+        hbox_a_layout = QHBoxLayout()  # 横向布局(scale)
+        a_label = QLabel('Angle: ')
+        self.a_inputline = QLineEdit('0')
+        self.a_inputline.setValidator(int_validator)  # 只接收整数
+        hbox_a_layout.addWidget(a_label)
+        hbox_a_layout.addWidget(self.a_inputline)
         hbox_b_layout = QHBoxLayout()  # 横向布局(button)
         ok_btn = QPushButton('确定')
         ok_btn.clicked.connect(self.accept)
@@ -555,6 +591,8 @@ class TranslateDialog(QDialog):  # 继承QDialog类
         vbox_layout.addLayout(hbox_y_layout)
         if has_scale:
             vbox_layout.addLayout(hbox_s_layout)
+        if has_angle:
+            vbox_layout.addLayout(hbox_a_layout)
         vbox_layout.addLayout(hbox_b_layout)
         self.setLayout(vbox_layout)
 
@@ -565,6 +603,9 @@ class TranslateDialog(QDialog):  # 继承QDialog类
         if self.has_scale:
             s_input = float(self.s_inputline.text())
             return [x_input, y_input, s_input, ok_pressed]
+        elif self.has_angle:
+            a_input = int(self.a_inputline.text())
+            return [x_input, y_input, a_input, ok_pressed]
         else:
             return [x_input, y_input, ok_pressed]
 
