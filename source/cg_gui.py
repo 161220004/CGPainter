@@ -54,6 +54,11 @@ class MyCanvas(QGraphicsView):
         selected_item.p_list = alg.translate(selected_item.p_list, dx, dy)
         self.updateScene([self.sceneRect()])
 
+    def scale_selected_item(self, cx, cy, s):  # 已经确认存在选中的图元了
+        selected_item = self.item_dict[self.selected_id]
+        selected_item.p_list = alg.scale(selected_item.p_list, cx, cy, s)
+        self.updateScene([self.sceneRect()])
+
     def clear_selection(self):
         """ 清空所选图元 """
         if self.selected_id != '' and len(self.item_dict) > 0:
@@ -332,6 +337,14 @@ class MyItem(QGraphicsItem):
                 return
         self.edit_rect_key = -1
 
+    def get_center(self):
+        xsum, ysum = 0, 0
+        num = len(self.p_list)
+        for i in range(num):
+            xsum += self.p_list[i][0]
+            ysum += self.p_list[i][1]
+        return [round(xsum / num), round(ysum / num)]
+
     def boundingRect(self) -> QRectF:
         """ 图元选择框 """
         if self.item_type == 'line' or self.item_type == 'ellipse':
@@ -412,6 +425,7 @@ class MainWindow(QMainWindow):
         polygon_bresenham_act.triggered.connect(self.polygon_bresenham_action)
         ellipse_act.triggered.connect(self.ellipse_action)
         translate_act.triggered.connect(self.translate_action)
+        scale_act.triggered.connect(self.scale_action)
         self.list_widget.currentTextChanged.connect(self.canvas_widget.selection_changed)
 
         # 设置主窗口的布局
@@ -489,37 +503,44 @@ class MainWindow(QMainWindow):
             if ok_pressed:
                 self.canvas_widget.translate_selected_item(x_input, y_input)
 
+    def scale_action(self):
+        if self.canvas_widget.status == '' and self.canvas_widget.selected_id != '':  # 可缩放
+            x_default, y_default = self.canvas_widget.item_dict[self.canvas_widget.selected_id].get_center()
+            x_input, y_input, s_input, ok_pressed = TranslateDialog('X中心: ', 'Y中心: ', True, x_default, y_default).get_input()
+            if ok_pressed:
+                self.canvas_widget.scale_selected_item(x_input, y_input, s_input)
+
 
 class TranslateDialog(QDialog):  # 继承QDialog类
 
-    def __init__(self, x_text: str, y_text: str, has_scale: bool = False):
+    def __init__(self, x_text: str, y_text: str, has_scale: bool = False, x_default: int = 0, y_default: int = 0):
         super().__init__()
         self.setWindowModality(Qt.ApplicationModal)  # 设置窗口为模态，用户只有关闭弹窗后，才能关闭主界面
         self.setWindowTitle('平移')
         self.resize(200, 100)
         self.has_scale = has_scale
         int_validator = QIntValidator(self)  # 只接收整数(1000~1000)
-        int_validator.setRange(-1000, 1000)
-        double_validator = QDoubleValidator(self)  # 只接收浮点数(0~1.00)
-        double_validator.setRange(0, 1)
+        int_validator.setRange(-9999, 9999)
+        double_validator = QDoubleValidator(self)  # 只接收浮点数(0~100)
+        double_validator.setRange(0, 999)
         double_validator.setNotation(QDoubleValidator.StandardNotation)
         double_validator.setDecimals(2)
         hbox_x_layout = QHBoxLayout()  # 横向布局(x)
         x_label = QLabel(x_text)
-        self.x_inputline = QLineEdit('0')
+        self.x_inputline = QLineEdit(str(x_default))
         self.x_inputline.setValidator(int_validator)  # 只接收整数
         hbox_x_layout.addWidget(x_label)
         hbox_x_layout.addWidget(self.x_inputline)
         hbox_y_layout = QHBoxLayout()  # 横向布局(y)
         y_label = QLabel(y_text)
-        self.y_inputline = QLineEdit('0')
+        self.y_inputline = QLineEdit(str(y_default))
         self.y_inputline.setValidator(int_validator)  # 只接收整数
         hbox_y_layout.addWidget(y_label)
         hbox_y_layout.addWidget(self.y_inputline)
         hbox_s_layout = QHBoxLayout()  # 横向布局(scale)
         s_label = QLabel('Scale: ')
-        self.s_inputline = QLineEdit('0')
-        self.s_inputline.setValidator(double_validator)  # 只接收浮点数(0~1)
+        self.s_inputline = QLineEdit('1')
+        self.s_inputline.setValidator(double_validator)  # 只接收浮点数
         hbox_s_layout.addWidget(s_label)
         hbox_s_layout.addWidget(self.s_inputline)
         hbox_b_layout = QHBoxLayout()  # 横向布局(button)

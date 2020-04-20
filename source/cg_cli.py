@@ -88,6 +88,12 @@ if __name__ == '__main__':
                 dx = int(line[2])
                 dy = int(line[3])
                 item_dict[item_id][1] = alg.translate(item_dict[item_id][1], dx, dy)
+            elif line[0] == 'scale':
+                item_id = line[1]
+                x = int(line[2])
+                y = int(line[3])
+                s = float(line[4])
+                item_dict[item_id][1] = alg.scale(item_dict[item_id][1], x, y, s)
             ...
             line = fp.readline()
 

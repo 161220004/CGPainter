@@ -11,11 +11,15 @@ drawPolygon polygon1 100 100 500 500 100 500 DDA
 saveCanvas 2
 resetCanvas 600 600
 drawPolygon polygon2 200 100 300 100 350 200 300 300 200 300 150 200 Bresenham
+drawPolygon polygon3 200 100 300 100 350 200 300 300 200 300 150 200 Bresenham
+scale polygon3 200 200 1.5
 saveCanvas 3
 resetCanvas 600 600
 setColor 0 255 0
 drawEllipse ellipse1 100 100 500 400
+drawEllipse ellipse2 100 100 500 400
+scale ellipse2 50 50 0.7
 setColor 255 0 0
-drawEllipse ellipse2 130 181 339 100
-drawEllipse ellipse3 204 332 377 403
+drawEllipse ellipse3 130 181 339 100
+drawEllipse ellipse4 204 332 377 403
 saveCanvas 4
