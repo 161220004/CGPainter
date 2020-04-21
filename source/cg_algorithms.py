@@ -11,6 +11,8 @@ def draw_line(p_list, algorithm):
     :param algorithm: (string) 绘制使用的算法，包括'DDA'和'Bresenham'，此处的'Naive'仅作为示例，测试时不会出现
     :return: (list of list of int: [(x_0, y_0), (x_1, y_1), (x_2, y_2), ...]) 绘制结果的像素点坐标列表
     """
+    if len(p_list) < 2:
+        return []
     x0, y0 = p_list[0]
     x1, y1 = p_list[1]
     result = []
@@ -202,4 +204,44 @@ def clip(p_list, x_min, y_min, x_max, y_max, algorithm):
     :param algorithm: (string) 使用的裁剪算法，包括'Cohen-Sutherland'和'Liang-Barsky'
     :return: (list of list of int: [(x_0, y_0), (x_1, y_1)]) 裁剪后线段的起点和终点坐标
     """
-    pass
+    if x_min > x_max:  # 保证x_min < x_max
+        x_min, x_max = x_max, x_min
+    if y_min > y_max:  # 保证y_min < y_max
+        y_min, y_max = y_max, y_min
+    x1, y1 = p_list[0]
+    x2, y2 = p_list[1]
+    if algorithm == 'Cohen-Sutherland':
+        while True:
+            p1, p2 = 0b0000, 0b0000
+            if x1 < x_min: p1 |= 0b0001  # 左
+            if x2 < x_min: p2 |= 0b0001
+            if x1 > x_max: p1 |= 0b0010  # 右
+            if x2 > x_max: p2 |= 0b0010
+            if y1 < y_min: p1 |= 0b0100  # 下
+            if y2 < y_min: p2 |= 0b0100
+            if y1 > y_max: p1 |= 0b1000  # 上
+            if y2 > y_max: p2 |= 0b1000
+            if p1 | p2 == 0b0000:  # 完全在区域内
+                return [(x1, y1), (x2, y2)]
+            if p1 & p2 != 0b0000:  # 完全在区域外
+                return []
+            # 开始裁剪（左 -> 右 -> 下 -> 上）
+            p = p1 | p2  # 为1的位表示与该位对应的边界相交
+            if x1 != x2:
+                if x1 > x2: x1, y1, x2, y2 = x2, y2, x1, y1  # 保证x1<x2
+                if p & 0b0001 > 0:  # 裁掉左边界以左
+                    y_left = (y1 - y2) * (x_min - x1) / (x1 - x2) + y1
+                    x1, y1 = x_min, round(y_left)
+                if p & 0b0010 > 0:  # 裁掉右边界以右
+                    y_right = (y1 - y2) * (x_max - x1) / (x1 - x2) + y1
+                    x2, y2 = x_max, round(y_right)
+            if y1 != y2:
+                if y1 > y2: x1, y1, x2, y2 = x2, y2, x1, y1  # 保证y1<y2
+                if p & 0b0100 > 0:  # 裁掉下边界以下
+                    x_bottom = (x1 - x2) * (y_min - y1) / (y1 - y2) + x1
+                    x1, y1 = round(x_bottom), y_min
+                if p & 0b1000 > 0:  # 裁掉上边界以上
+                    x_top = (x1 - x2) * (y_max - y1) / (y1 - y2) + x1
+                    x2, y2 = round(x_top), y_max
+    elif algorithm == 'Liang-Barsky':
+        pass

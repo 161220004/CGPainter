@@ -50,17 +50,25 @@ class MyCanvas(QGraphicsView):
         """ 开始绘制椭圆，更改当前状态为椭圆绘制中 """
         self.status = 'ellipse'
 
+    def start_clip(self, algorithm):
+        """ 开始裁剪线段 """
+        self.status = 'clip'
+        self.temp_algorithm = algorithm
+
     def translate_selected_item(self, dx, dy):  # 已经确认存在选中的图元了
+        """ 平移 """
         selected_item = self.item_dict[self.selected_id]
         selected_item.p_list = alg.translate(selected_item.p_list, dx, dy)
         self.updateScene([self.sceneRect()])
 
     def scale_selected_item(self, cx, cy, s):  # 已经确认存在选中的图元了
+        """ 缩放 """
         selected_item = self.item_dict[self.selected_id]
         selected_item.p_list = alg.scale(selected_item.p_list, cx, cy, s)
         self.updateScene([self.sceneRect()])
 
     def rotate_selected_item(self, cx, cy, r):  # 已经确认存在选中的图元了
+        """ 旋转 """
         selected_item = self.item_dict[self.selected_id]
         selected_item.p_list = alg.rotate(selected_item.p_list, cx, cy, r)
         self.updateScene([self.sceneRect()])
@@ -77,7 +85,7 @@ class MyCanvas(QGraphicsView):
         """ 更改所选图元 """
         if len(self.item_dict) > 0 and selected:
             self.main_window.statusBar().showMessage('图元选择： %s  (Ctrl+T[Win]/Cmd+T[Mac]进入编辑模式)' % selected)
-            if self.selected_id != '':
+            if self.selected_id != '' and self.item_dict.__contains__(self.selected_id):
                 self.item_dict[self.selected_id].selected = False
                 self.item_dict[self.selected_id].update()
             self.selected_id = selected
@@ -118,6 +126,11 @@ class MyCanvas(QGraphicsView):
                             select_items = self.list_widget.findItems(item.id, Qt.MatchExactly)
                             if select_items:
                                 self.list_widget.setCurrentItem(select_items[0])
+                                self.selection_changed(item.id)
+            elif self.status == 'clip':
+                # 线段裁剪状态 --> 画一个矩形裁剪框
+                self.temp_item = MyItem('', 'polygon', [(x, y), (x, y), (x, y), (x, y)], QColor(255, 0, 0), 'DDA')
+                self.scene().addItem(self.temp_item)
             elif self.status == 'line':
                 # 直线绘制状态 --> 选定一个端点
                 self.is_drawing = True
@@ -198,6 +211,11 @@ class MyCanvas(QGraphicsView):
                     selected_item.mov_dis = (dx, dy)
             elif selected_item.item_type == 'curve':
                 pass
+        elif self.status == 'clip':  # 线段裁剪框绘制
+            x0, y0 = self.temp_item.p_list[0]
+            self.temp_item.p_list[1] = (x0, y)
+            self.temp_item.p_list[2] = (x, y)
+            self.temp_item.p_list[3] = (x, y0)
         elif self.status == 'line' or self.status == 'ellipse':
             self.temp_item.p_list[1] = (x, y)
         elif self.status == 'polygon':
@@ -216,6 +234,22 @@ class MyCanvas(QGraphicsView):
                     selected_item.p_list[v] = (sx + dx, sy + dy)
                 selected_item.mov_dis = (0, 0)
                 selected_item.edit_rect_key = -1
+            elif self.status == 'clip':  # 裁剪并删除线段裁剪框
+                selected_line = self.item_dict[self.selected_id]
+                x_min, y_min = self.temp_item.p_list[0]
+                x_max, y_max = self.temp_item.p_list[2]
+                selected_line.p_list = alg.clip(selected_line.p_list, x_min, y_min, x_max, y_max, self.temp_algorithm)
+                self.scene().removeItem(self.temp_item)
+                # 如果线段裁剪没了，从图元列表中移除
+                if len(selected_line.p_list) == 0:
+                    self.item_dict.pop(self.selected_id)
+                    self.scene().removeItem(selected_line)
+                    selected_item = self.list_widget.selectedItems()[0]
+                    self.list_widget.takeItem(self.list_widget.row(selected_item))
+                    self.list_widget.clearSelection()
+                    self.clear_selection()
+                    self.status = ''
+                    self.main_window.statusBar().showMessage('空闲')
             elif self.status == 'line' or self.status == 'ellipse':
                 # 完成一个直线/椭圆的绘制
                 self.item_dict[self.temp_id] = self.temp_item
@@ -353,6 +387,8 @@ class MyItem(QGraphicsItem):
 
     def boundingRect(self) -> QRectF:
         """ 图元选择框 """
+        if len(self.p_list) == 0:  # 无效图元
+            return QRectF()
         if self.item_type == 'line' or self.item_type == 'ellipse':
             x0, y0 = self.p_list[0]
             x1, y1 = self.p_list[1]
@@ -433,6 +469,7 @@ class MainWindow(QMainWindow):
         translate_act.triggered.connect(self.translate_action)
         rotate_act.triggered.connect(self.rotate_action)
         scale_act.triggered.connect(self.scale_action)
+        clip_cohen_sutherland_act.triggered.connect(self.clip_cohen_sutherland_action)
         self.list_widget.currentTextChanged.connect(self.canvas_widget.selection_changed)
 
         # 设置主窗口的布局
@@ -534,9 +571,22 @@ class MainWindow(QMainWindow):
         else:
             reply = QMessageBox.warning(self, '注意', '请先选中一个图元', QMessageBox.Yes, QMessageBox.Yes)
 
+    def clip_cohen_sutherland_action(self):
+        if self.canvas_widget.status == '' and self.canvas_widget.selected_id != '':
+            selected_line = self.canvas_widget.item_dict[self.canvas_widget.selected_id]
+            if selected_line.item_type == 'line':
+                self.canvas_widget.start_clip('Cohen-Sutherland')
+                self.statusBar().showMessage('Cohen-Sutherland算法裁剪线段')
+            else:
+                reply = QMessageBox.warning(self, '注意', '仅线段提供裁剪功能', QMessageBox.Yes, QMessageBox.Yes)
+        else:
+            reply = QMessageBox.warning(self, '注意', '请先选中一个图元', QMessageBox.Yes, QMessageBox.Yes)
+
 
 class TranslateDialog(QDialog):  # 继承QDialog类
-
+    """
+    自定义输入框（平移/旋转/缩放参数）
+    """
     def __init__(self, x_text: str, y_text: str, has_scale: bool = False, has_angle: bool = False, x_default: int = 0, y_default: int = 0):
         super().__init__()
         self.setWindowModality(Qt.ApplicationModal)  # 设置窗口为模态，用户只有关闭弹窗后，才能关闭主界面

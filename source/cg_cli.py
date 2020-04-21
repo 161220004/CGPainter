@@ -101,6 +101,15 @@ if __name__ == '__main__':
                     y = int(line[3])
                     r = float(line[4])
                     item_dict[item_id][1] = alg.rotate(item_dict[item_id][1], x, y, r)
+            elif line[0] == 'clip':
+                item_id = line[1]
+                if item_dict[item_id][0] == 'line':
+                    x_min = int(line[2])
+                    y_min = int(line[3])
+                    x_max = int(line[4])
+                    y_max = int(line[5])
+                    algorithm = line[6]
+                    item_dict[item_id][1] = alg.clip(item_dict[item_id][1], x_min, y_min, x_max, y_max, algorithm)
             ...
             line = fp.readline()
 
