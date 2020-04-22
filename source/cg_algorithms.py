@@ -8,7 +8,7 @@ import math
 def draw_line(p_list, algorithm):
     """ 绘制线段
     :param p_list: (list of list of int: [(x0, y0), (x1, y1)]) 线段的起点和终点坐标
-    :param algorithm: (string) 绘制使用的算法，包括'DDA'和'Bresenham'，此处的'Naive'仅作为示例，测试时不会出现
+    :param algorithm: (string) 绘制使用的算法，包括'DDA'和'Bresenham'
     :return: (list of list of int: [(x_0, y_0), (x_1, y_1), (x_2, y_2), ...]) 绘制结果的像素点坐标列表
     """
     if len(p_list) < 2:
@@ -16,17 +16,7 @@ def draw_line(p_list, algorithm):
     x0, y0 = p_list[0]
     x1, y1 = p_list[1]
     result = []
-    if algorithm == 'Naive':
-        if x0 == x1:
-            for y in range(y0, y1 + 1):
-                result.append((x0, y))
-        else:
-            if x0 > x1:  # 保证 x0 < x1
-                x0, y0, x1, y1 = x1, y1, x0, y0
-            k = (y1 - y0) / (x1 - x0)
-            for x in range(x0, x1 + 1):
-                result.append((x, int(y0 + k * (x - x0))))
-    elif algorithm == 'DDA':
+    if algorithm == 'DDA':
         dis = max(abs(x1 - x0), abs(y1 - y0))
         if dis > 0:
             dx = (x1 - x0) / dis

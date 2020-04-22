@@ -446,7 +446,6 @@ class MainWindow(QMainWindow):
         exit_act = file_menu.addAction('退出')
         draw_menu = menubar.addMenu('绘制')
         line_menu = draw_menu.addMenu('线段')
-        line_naive_act = line_menu.addAction('Naive')
         line_dda_act = line_menu.addAction('DDA')
         line_bresenham_act = line_menu.addAction('Bresenham')
         polygon_menu = draw_menu.addMenu('多边形')
@@ -468,7 +467,6 @@ class MainWindow(QMainWindow):
         set_pen_act.triggered.connect(self.set_pen_action)
         reset_canvas_act.triggered.connect(self.reset_action)
         exit_act.triggered.connect(qApp.quit)
-        line_naive_act.triggered.connect(self.line_naive_action)
         line_dda_act.triggered.connect(self.line_dda_action)
         line_bresenham_act.triggered.connect(self.line_bresenham_action)
         polygon_dda_act.triggered.connect(self.polygon_dda_action)
@@ -510,12 +508,6 @@ class MainWindow(QMainWindow):
         self.list_widget.clear()
         self.canvas_widget.reset_all()
         self.item_cnt = 0
-
-    def line_naive_action(self):
-        self.canvas_widget.start_draw_line('Naive')
-        self.statusBar().showMessage('Naive算法绘制线段')
-        self.list_widget.clearSelection()
-        self.canvas_widget.clear_selection()
 
     def line_dda_action(self):
         self.canvas_widget.start_draw_line('DDA')
