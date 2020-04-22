@@ -55,27 +55,30 @@ class MyCanvas(QGraphicsView):
         self.status = 'clip'
         self.temp_algorithm = algorithm
 
-    def translate_selected_item(self, dx, dy):  # 已经确认存在选中的图元了
+    def translate_selected_item(self, dx, dy):
         """ 平移 """
-        selected_item = self.item_dict[self.selected_id]
-        selected_item.p_list = alg.translate(selected_item.p_list, dx, dy)
-        self.updateScene([self.sceneRect()])
+        if self.selected_id != '' and self.item_dict.__contains__(self.selected_id):
+            selected_item = self.item_dict[self.selected_id]
+            selected_item.p_list = alg.translate(selected_item.p_list, dx, dy)
+            self.updateScene([self.sceneRect()])
 
-    def scale_selected_item(self, cx, cy, s):  # 已经确认存在选中的图元了
+    def scale_selected_item(self, cx, cy, s):
         """ 缩放 """
-        selected_item = self.item_dict[self.selected_id]
-        selected_item.p_list = alg.scale(selected_item.p_list, cx, cy, s)
-        self.updateScene([self.sceneRect()])
+        if self.selected_id != '' and self.item_dict.__contains__(self.selected_id):
+            selected_item = self.item_dict[self.selected_id]
+            selected_item.p_list = alg.scale(selected_item.p_list, cx, cy, s)
+            self.updateScene([self.sceneRect()])
 
-    def rotate_selected_item(self, cx, cy, r):  # 已经确认存在选中的图元了
+    def rotate_selected_item(self, cx, cy, r):
         """ 旋转 """
-        selected_item = self.item_dict[self.selected_id]
-        selected_item.p_list = alg.rotate(selected_item.p_list, cx, cy, r)
-        self.updateScene([self.sceneRect()])
+        if self.selected_id != '' and self.item_dict.__contains__(self.selected_id):
+            selected_item = self.item_dict[self.selected_id]
+            selected_item.p_list = alg.rotate(selected_item.p_list, cx, cy, r)
+            self.updateScene([self.sceneRect()])
 
     def clear_selection(self):
         """ 清空所选图元 """
-        if self.selected_id != '' and len(self.item_dict) > 0:
+        if self.selected_id != '' and self.item_dict.__contains__(self.selected_id):
             self.item_dict[self.selected_id].selected = False
             self.item_dict[self.selected_id].update()
             self.selected_id = ''
@@ -83,7 +86,7 @@ class MyCanvas(QGraphicsView):
 
     def selection_changed(self, selected):
         """ 更改所选图元 """
-        if len(self.item_dict) > 0 and selected:
+        if selected != '' and self.item_dict.__contains__(selected):
             self.main_window.statusBar().showMessage('图元选择： %s  (Ctrl+T[Win]/Cmd+T[Mac]进入编辑模式)' % selected)
             if self.selected_id != '' and self.item_dict.__contains__(self.selected_id):
                 self.item_dict[self.selected_id].selected = False
@@ -93,6 +96,15 @@ class MyCanvas(QGraphicsView):
             self.item_dict[selected].update()
             self.status = ''
             self.updateScene([self.sceneRect()])
+
+    def delete_selected_item(self):
+        if self.selected_id != '' and self.item_dict.__contains__(self.selected_id):
+            selected_item = self.item_dict.pop(self.selected_id)
+            self.scene().removeItem(selected_item)
+            selected_row = self.list_widget.selectedItems()[0]
+            self.list_widget.takeItem(self.list_widget.row(selected_row))
+            self.list_widget.clearSelection()
+            self.clear_selection()
 
     def reset_all(self):
         self.clear_selection()
@@ -243,14 +255,7 @@ class MyCanvas(QGraphicsView):
                 self.scene().removeItem(self.temp_item)
                 # 如果线段裁剪没了，从图元列表中移除
                 if len(selected_line.p_list) == 0:
-                    self.item_dict.pop(self.selected_id)
-                    self.scene().removeItem(selected_line)
-                    selected_item = self.list_widget.selectedItems()[0]
-                    self.list_widget.takeItem(self.list_widget.row(selected_item))
-                    self.list_widget.clearSelection()
-                    self.clear_selection()
-                    self.is_editing = False
-                    self.list_widget.setDisabled(False)
+                    self.delete_selected_item()
                     self.status = ''
                     self.main_window.statusBar().showMessage('空闲')
             elif self.status == 'line' or self.status == 'ellipse':
@@ -265,14 +270,14 @@ class MyCanvas(QGraphicsView):
         """ 一些键盘指令 """
         if event.key() == Qt.Key_T and QApplication.keyboardModifiers() == Qt.ControlModifier:
             # Ctrl + T (Win) / Command + T (Mac): 编辑当前选中的图元，编辑模式禁止改变选中的图元
-            if self.status == '' and self.selected_id != '':
+            if self.status == '' and self.selected_id != '' and self.item_dict.__contains__(self.selected_id):
                 self.main_window.statusBar().showMessage('图元编辑： %s  (回车退出编辑模式)' % self.selected_id)
                 self.is_editing = True
                 self.item_dict[self.selected_id].editing = True
                 self.list_widget.setDisabled(True)
         if self.is_editing and (event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter):
             # Enter: 停止编辑
-            if self.status == '' and self.selected_id != '':
+            if self.status == '' and self.selected_id != '' and self.item_dict.__contains__(self.selected_id):
                 self.main_window.statusBar().showMessage('图元选择： %s  (Ctrl+T[Win]/Cmd+T[Mac]进入编辑模式)' % self.selected_id)
                 self.is_editing = False
                 self.item_dict[self.selected_id].editing = False
@@ -473,6 +478,7 @@ class MainWindow(QMainWindow):
         rotate_act.triggered.connect(self.rotate_action)
         scale_act.triggered.connect(self.scale_action)
         clip_cohen_sutherland_act.triggered.connect(self.clip_cohen_sutherland_action)
+        clip_liang_barsky_act.triggered.connect(self.clip_liang_barsky_action)
         self.list_widget.currentTextChanged.connect(self.canvas_widget.selection_changed)
 
         # 设置主窗口的布局
@@ -575,16 +581,26 @@ class MainWindow(QMainWindow):
         else:
             reply = QMessageBox.warning(self, '注意', '请先选中一个图元', QMessageBox.Yes, QMessageBox.Yes)
 
-    def clip_cohen_sutherland_action(self):
-        if self.canvas_widget.status == '' and self.canvas_widget.selected_id != '':
-            selected_line = self.canvas_widget.item_dict[self.canvas_widget.selected_id]
-            if selected_line.item_type == 'line':
-                self.canvas_widget.start_clip('Cohen-Sutherland')
-                self.statusBar().showMessage('Cohen-Sutherland算法裁剪线段')
+    def clip_action(self, algorithm):
+        if self.canvas_widget.selected_id != '' and self.canvas_widget.item_dict.__contains__(self.canvas_widget.selected_id):
+            if not self.canvas_widget.is_editing:
+                selected_line = self.canvas_widget.item_dict[self.canvas_widget.selected_id]
+                if selected_line.item_type == 'line':
+                    self.canvas_widget.start_clip(algorithm)
+                    self.statusBar().showMessage(algorithm + '算法裁剪线段')
+                else:
+                    reply = QMessageBox.warning(self, '注意', '仅线段提供裁剪功能', QMessageBox.Yes, QMessageBox.Yes)
             else:
-                reply = QMessageBox.warning(self, '注意', '仅线段提供裁剪功能', QMessageBox.Yes, QMessageBox.Yes)
+                reply = QMessageBox.warning(self, '注意', '请先回车退出编辑模式', QMessageBox.Yes, QMessageBox.Yes)
         else:
             reply = QMessageBox.warning(self, '注意', '请先选中一个图元', QMessageBox.Yes, QMessageBox.Yes)
+
+    def clip_cohen_sutherland_action(self):
+        self.clip_action('Cohen-Sutherland')
+
+    def clip_liang_barsky_action(self):
+        self.clip_action('Liang-Barsky')
+
 
 
 class TranslateDialog(QDialog):  # 继承QDialog类

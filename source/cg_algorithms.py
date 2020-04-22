@@ -244,4 +244,26 @@ def clip(p_list, x_min, y_min, x_max, y_max, algorithm):
                     x_top = (x1 - x2) * (y_max - y1) / (y1 - y2) + x1
                     x2, y2 = round(x_top), y_max
     elif algorithm == 'Liang-Barsky':
-        pass
+        dx, dy = x2 - x1, y2 - y1
+        p, q = [0, 0, 0, 0], [0, 0, 0, 0]
+        p[0], q[0] = -dx, x1 - x_min  # 左
+        p[1], q[1] = dx, x_max - x1   # 右
+        p[2], q[2] = -dy, y1 - y_min  # 下
+        p[3], q[3] = dy, y_max - y1   # 上
+        u1, u2 = 0, 1
+        for i in range(4):
+            if p[i] == 0:  # 与坐标轴平行
+                if q[i] < 0:  # 边界外，舍弃
+                    return []
+            elif p[i] < 0:  # 是入边交点，取最大值
+                u1 = max(u1, q[i] / p[i])
+            else:  # 是出边交点，取最小值
+                u2 = min(u2, q[i] / p[i])
+        if u1 > u2:  # 边界外，舍弃
+            return []
+        else:
+            x3 = round(x1 + u1 * dx)
+            y3 = round(y1 + u1 * dy)
+            x4 = round(x1 + u2 * dx)
+            y4 = round(y1 + u2 * dy)
+            return [(x3, y3), (x4, y4)]
