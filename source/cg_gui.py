@@ -96,7 +96,8 @@ class MyCanvas(QGraphicsView):
 
     def reset_all(self):
         self.clear_selection()
-        self.scene().clear()
+        for item in self.item_dict.values():
+            self.scene().removeItem(item)
         self.item_dict.clear()
         self.status = ''
         self.is_drawing = False
@@ -248,6 +249,8 @@ class MyCanvas(QGraphicsView):
                     self.list_widget.takeItem(self.list_widget.row(selected_item))
                     self.list_widget.clearSelection()
                     self.clear_selection()
+                    self.is_editing = False
+                    self.list_widget.setDisabled(False)
                     self.status = ''
                     self.main_window.statusBar().showMessage('空闲')
             elif self.status == 'line' or self.status == 'ellipse':
@@ -306,6 +309,7 @@ class MyItem(QGraphicsItem):
 
     def paint(self, painter: QPainter, option: QStyleOptionGraphicsItem, widget: Optional[QWidget] = ...) -> None:
         """ 图元绘制，每当update时调用 """
+        if len(self.p_list) == 0: return  # 无效图元
         p_list_real = []
         if self.editing:  # 编辑模式，有位移
             for v in range(len(self.p_list)):
@@ -387,8 +391,7 @@ class MyItem(QGraphicsItem):
 
     def boundingRect(self) -> QRectF:
         """ 图元选择框 """
-        if len(self.p_list) == 0:  # 无效图元
-            return QRectF()
+        if len(self.p_list) == 0: return QRectF()  # 无效图元
         if self.item_type == 'line' or self.item_type == 'ellipse':
             x0, y0 = self.p_list[0]
             x1, y1 = self.p_list[1]
@@ -500,6 +503,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage('空闲')
         self.list_widget.clear()
         self.canvas_widget.reset_all()
+        self.item_cnt = 0
 
     def line_naive_action(self):
         self.canvas_widget.start_draw_line('Naive')
