@@ -621,12 +621,12 @@ class TranslateDialog(QDialog):  # 继承QDialog类
         self.resize(200, 100)
         self.has_scale = has_scale
         self.has_angle = has_angle
-        int_validator = QIntValidator(self)  # 只接收整数(1000~1000)
+        int_validator = QIntValidator(self)  # 只接收整数(范围: -9999～9999)
         int_validator.setRange(-9999, 9999)
-        double_validator = QDoubleValidator(self)  # 只接收浮点数(0~100)
+        double_validator = QDoubleValidator(self)  # 只接收浮点数(范围: 0～999)
         double_validator.setRange(0, 999)
         double_validator.setNotation(QDoubleValidator.StandardNotation)
-        double_validator.setDecimals(2)
+        double_validator.setDecimals(2)  # 精度：小数点后2位
         hbox_x_layout = QHBoxLayout()  # 横向布局(x)
         x_label = QLabel(x_text)
         self.x_inputline = QLineEdit(str(x_default))
