@@ -44,7 +44,7 @@ if __name__ == '__main__':
                     if item_type == 'line':
                         pixels = alg.draw_line(p_list, algorithm)
                     elif item_type == 'polygon':
-                        pixels = alg.draw_polygon(p_list, algorithm)
+                        pixels = alg.draw_polygon(p_list, algorithm, True)
                     elif item_type == 'ellipse':
                         pixels = alg.draw_ellipse(p_list)
                     elif item_type == 'curve':

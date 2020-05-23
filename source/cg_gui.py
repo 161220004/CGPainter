@@ -167,40 +167,22 @@ class MyCanvas(QGraphicsView):
                 self.temp_id = 'Ellipse' + str(self.main_window.get_item_num())
                 self.temp_item = MyItem(self.temp_id, self.status, [(x, y), (x, y)], self.temp_color)
                 self.scene().addItem(self.temp_item)
-            elif self.status == 'polygon':
-                # 多边形绘制状态 --> 确定多边形的一个顶点
-                if self.temp_v == 0:  # 第一个顶点
-                    self.temp_id = 'Polygon' + str(self.main_window.get_item_num())
-                    poly_vs = []
-                    for v in range(self.temp_vnum):
-                        poly_vs.append((x, y))
-                    self.temp_item = MyItem(self.temp_id, self.status, poly_vs, self.temp_color, self.temp_algorithm)
-                    self.scene().addItem(self.temp_item)
-                    self.setMouseTracking(True)
-                    self.temp_v += 1
-                else:  # 其他顶点
-                    self.temp_item.p_list[self.temp_v] = (x, y)
-                    self.temp_v += 1
-                    if self.temp_v >= self.temp_vnum:  # 所有顶点绘制结束
-                        self.item_dict[self.temp_id] = self.temp_item
-                        self.list_widget.addItem(self.temp_id)
-                        self.setMouseTracking(False)
-                        self.is_drawing = False
-                        self.status = ''
-                        self.main_window.statusBar().showMessage('空闲')
-            elif self.status == 'curve':
-                # 曲线绘制状态 --> 确定曲线的一个控制点
-                if self.temp_v == 0:  # 第一个控制点
-                    self.temp_id = 'Curve' + str(self.main_window.get_item_num())
-                    # 先添加第一个和第二个控制点
+            elif self.status == 'polygon' or self.status == 'curve':
+                # 多边形绘制状态 --> 确定多边形的一个顶点 / 曲线绘制状态 --> 确定曲线的一个控制点
+                if self.temp_v == 0:  # 第一个顶点/控制点
+                    if self.status == 'polygon':
+                        self.temp_id = 'Polygon' + str(self.main_window.get_item_num())
+                    else:
+                        self.temp_id = 'Curve' + str(self.main_window.get_item_num())
+                    # 先添加第一个和第二个顶点/控制点
                     self.temp_item = MyItem(self.temp_id, self.status, [(x, y), (x, y)], self.temp_color, self.temp_algorithm)
                     self.scene().addItem(self.temp_item)
                     self.setMouseTracking(True)
                     self.temp_v += 1
-                else:  # 其他控制点
-                    self.temp_item.p_list[self.temp_v] = (x, y)  # 确认当前控制点
+                else:  # 其他顶点/控制点
+                    self.temp_item.p_list[self.temp_v] = (x, y)  # 确认当前顶点/控制点
                     self.temp_v += 1
-                    if self.temp_v >= self.temp_vnum:  # 所有控制点绘制结束
+                    if self.temp_v >= self.temp_vnum:  # 所有顶点/控制点绘制结束
                         self.item_dict[self.temp_id] = self.temp_item
                         self.list_widget.addItem(self.temp_id)
                         self.setMouseTracking(False)
@@ -208,7 +190,9 @@ class MyCanvas(QGraphicsView):
                         self.status = ''
                         self.main_window.statusBar().showMessage('空闲')
                     else:
-                        self.temp_item.p_list.append((x, y))  # 添加下一个控制点
+                        self.temp_item.p_list.append((x, y))  # 添加下一个顶点/控制点
+                        if self.status == 'polygon' and self.temp_v == self.temp_vnum - 1:  # 多边形的最后一个顶点，则闭合多边形
+                            self.temp_item.poly_closed = True
         elif event.button() == Qt.RightButton:
             # 右键：停止绘制并取消一切选择(非编辑模式)
             if not self.is_drawing and not self.is_editing:
@@ -345,6 +329,7 @@ class MyItem(QGraphicsItem):
         self.rect_dict = {}           # 图元的可编辑锚点
         self.edit_rect_key = -1       # 当前如果处于编辑状态，正在编辑的锚点
         self.mov_dis = (0, 0)         # 当前如果处于编辑状态，图元位移
+        self.poly_closed = False      # 图元如果是多边形，是否闭合
 
     def paint(self, painter: QPainter, option: QStyleOptionGraphicsItem, widget: Optional[QWidget] = ...) -> None:
         """ 图元绘制，每当update时调用 """
@@ -359,7 +344,7 @@ class MyItem(QGraphicsItem):
         if self.item_type == 'line':
             self.item_pixels = alg.draw_line(p_list_real, self.algorithm)
         elif self.item_type == 'polygon':
-            self.item_pixels = alg.draw_polygon(p_list_real, self.algorithm)
+            self.item_pixels = alg.draw_polygon(p_list_real, self.algorithm, self.poly_closed)
         elif self.item_type == 'ellipse':
             self.item_pixels = alg.draw_ellipse(p_list_real)
         elif self.item_type == 'curve':

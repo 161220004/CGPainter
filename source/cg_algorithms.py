@@ -64,8 +64,9 @@ def draw_line(p_list, algorithm):
     return result
 
 
-def draw_polygon(p_list, algorithm):
+def draw_polygon(p_list, algorithm, is_closed):
     """ 绘制多边形
+    :param is_closed: 是否闭合
     :param p_list: (list of list of int: [(x0, y0), (x1, y1), (x2, y2), ...]) 多边形的顶点坐标列表
     :param algorithm: (string) 绘制使用的算法，包括'DDA'和'Bresenham'
     :return: (list of list of int: [(x_0, y_0), (x_1, y_1), (x_2, y_2), ...]) 绘制结果的像素点坐标列表
@@ -73,10 +74,11 @@ def draw_polygon(p_list, algorithm):
     result = []
     v_num = len(p_list)
     for i in range(v_num):
-        if i + 1 < v_num and p_list[i + 1] == p_list[0]:
-            break
-        line = draw_line([p_list[i], p_list[(i + 1) % v_num]], algorithm)
-        result += line
+        if i == v_num - 1:  # 最后一个
+            if is_closed:  # 闭合多边形
+                result += draw_line([p_list[i], p_list[0]], algorithm)
+        else:
+            result += draw_line([p_list[i], p_list[i + 1]], algorithm)
     return result
 
 
