@@ -71,11 +71,11 @@ def draw_polygon(p_list, algorithm):
     :return: (list of list of int: [(x_0, y_0), (x_1, y_1), (x_2, y_2), ...]) 绘制结果的像素点坐标列表
     """
     result = []
-    vnum = len(p_list)
-    for i in range(vnum):
-        if i + 1 < vnum and p_list[i + 1] == p_list[0]:
+    v_num = len(p_list)
+    for i in range(v_num):
+        if i + 1 < v_num and p_list[i + 1] == p_list[0]:
             break
-        line = draw_line([p_list[i], p_list[(i + 1) % vnum]], algorithm)
+        line = draw_line([p_list[i], p_list[(i + 1) % v_num]], algorithm)
         result += line
     return result
 
@@ -135,7 +135,35 @@ def draw_curve(p_list, algorithm):
     :param algorithm: (string) 绘制使用的算法，包括'Bezier'和'B-spline'（三次均匀B样条曲线，曲线不必经过首末控制点）
     :return: (list of list of int: [(x_0, y_0), (x_1, y_1), (x_2, y_2), ...]) 绘制结果的像素点坐标列表
     """
-    pass
+    p_num = len(p_list)
+    result = []
+    if algorithm == 'Bezier':
+        p_key = []  # 得到的所有点，需要用直线连接后作为曲线
+        t = 0
+        while t <= 1:
+            p = []
+            for i in range(p_num):  # 初始化P0点集
+                p.append(p_list[i])
+            for i in range(1, p_num):
+                p_tmp = []
+                for j in range(p_num - i):
+                    x0, y0 = p[j]
+                    x1, y1 = p[j + 1]
+                    x = (1 - t) * x0 + t * x1
+                    y = (1 - t) * y0 + t * y1
+                    p_tmp.append((x, y))
+                for j in range(p_num - i):
+                    p[j] = p_tmp[j]
+            # 现在，得到了最终的点，p[0]
+            p_key.append((int(p[0][0]), int(p[0][1])))
+            t += 0.01
+        # 开始连接
+        for i in range(len(p_key) - 1):
+            line = draw_line([p_key[i], p_key[i + 1]], 'Bresenham')
+            result += line
+    elif algorithm == 'B-spline':
+        pass
+    return result
 
 
 def translate(p_list, dx, dy):

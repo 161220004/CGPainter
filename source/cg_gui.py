@@ -555,10 +555,16 @@ class MainWindow(QMainWindow):
 
     def scale_action(self):
         if self.canvas_widget.status == '' and self.is_valid_selection():  # 可缩放
-            x_default, y_default = self.canvas_widget.item_dict[self.canvas_widget.selected_id].get_center()
-            x_input, y_input, s_input, ok_pressed = TranslateDialog('X中心: ', 'Y中心: ', True, False, x_default, y_default).get_input()
-            if ok_pressed:
-                self.canvas_widget.scale_selected_item(x_input, y_input, s_input)
+            selected_item = self.canvas_widget.item_dict[self.canvas_widget.selected_id]
+            x0, y0 = selected_item.p_list[0]
+            x1, y1 = selected_item.p_list[1]
+            if x0 != x1 or y0 != y1:
+                x_default, y_default = selected_item.get_center()
+                x_input, y_input, s_input, ok_pressed = TranslateDialog('X中心: ', 'Y中心: ', True, False, x_default, y_default).get_input()
+                if ok_pressed:
+                    self.canvas_widget.scale_selected_item(x_input, y_input, s_input)
+            else:
+                reply = QMessageBox.warning(self, '注意', '无法缩放一个像素点', QMessageBox.Yes, QMessageBox.Yes)
         else:
             reply = QMessageBox.warning(self, '注意', '请先选中一个图元', QMessageBox.Yes, QMessageBox.Yes)
 
