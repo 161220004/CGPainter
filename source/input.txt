@@ -33,6 +33,9 @@ drawEllipse ellipse3 130 181 339 100
 drawEllipse ellipse4 204 332 377 403
 saveCanvas 4
 resetCanvas 600 600
-drawCurve curve1 100 200 200 100 300 200 Bezier
-drawCurve curve2 100 400 200 300 300 400 400 300 Bezier
+drawCurve curve1 50 200 100 100 150 200 Bezier
+drawCurve curve2 50 400 100 300 150 400 200 300 Bezier
+setColor 0 0 255
+drawCurve curve3 250 400 300 300 350 400 400 300 B-spline
+drawCurve curve4 250 200 300 50 350 250 400 100 450 200 B-spline
 saveCanvas 5

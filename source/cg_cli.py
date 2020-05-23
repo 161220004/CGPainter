@@ -119,6 +119,5 @@ if __name__ == '__main__':
                     y_max = int(line[5])
                     algorithm = line[6]
                     item_dict[item_id][1] = alg.clip(item_dict[item_id][1], x_min, y_min, x_max, y_max, algorithm)
-            ...
             line = fp.readline()
 

@@ -139,8 +139,8 @@ def draw_curve(p_list, algorithm):
     """
     p_num = len(p_list)
     result = []
+    p_key = []  # 得到的所有点，需要用直线连接后作为曲线
     if algorithm == 'Bezier':
-        p_key = []  # 得到的所有点，需要用直线连接后作为曲线
         t = 0
         while t < 1:
             p = []
@@ -160,12 +160,29 @@ def draw_curve(p_list, algorithm):
             p_key.append((int(p[0][0]), int(p[0][1])))
             t += 0.01
         p_key.append(p_list[p_num - 1])  # 加上最后一个控制点
-        # 开始连接
-        for i in range(len(p_key) - 1):
-            line = draw_line([p_key[i], p_key[i + 1]], 'Bresenham')
-            result += line
     elif algorithm == 'B-spline':
-        pass
+        for i in range(p_num - 3):  # 每4个点为一组：[p0, p(n-4)] ~ [p3, p(n-1)]
+            p0, p1, p2, p3 = p_list[i], p_list[i + 1], p_list[i + 2], p_list[i + 3]
+            x0, x1, x2, x3 = p0[0], p1[0], p2[0], p3[0]
+            y0, y1, y2, y3 = p0[1], p1[1], p2[1], p3[1]
+            a0 = (x0 + 4 * x1 + x2) / 6
+            a1 = - (x0 - x2) / 2
+            a2 = (x0 - 2 * x1 + x2) / 2
+            a3 = - (x0 - 3 * x1 + 3 * x2 - x3) / 6
+            b0 = (y0 + 4 * y1 + y2) / 6
+            b1 = - (y0 - y2) / 2
+            b2 = (y0 - 2 * y1 + y2) / 2
+            b3 = - (y0 - 3 * y1 + 3 * y2 - y3) / 6
+            t = 0
+            while t < 1.005:
+                xt = a0 + a1 * t + a2 * t * t + a3 * t * t * t
+                yt = b0 + b1 * t + b2 * t * t + b3 * t * t * t
+                p_key.append((int(xt), int(yt)))
+                t += 0.01
+    # 开始连接
+    for i in range(len(p_key) - 1):
+        line = draw_line([p_key[i], p_key[i + 1]], 'Bresenham')
+        result += line
     return result
 
 

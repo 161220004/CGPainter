@@ -491,6 +491,7 @@ class MainWindow(QMainWindow):
         polygon_bresenham_act.triggered.connect(self.polygon_bresenham_action)
         ellipse_act.triggered.connect(self.ellipse_action)
         curve_bezier_act.triggered.connect(self.curve_bezier_action)
+        curve_b_spline_act.triggered.connect(self.curve_b_spline_action)
         translate_act.triggered.connect(self.translate_action)
         rotate_act.triggered.connect(self.rotate_action)
         scale_act.triggered.connect(self.scale_action)
@@ -558,10 +559,17 @@ class MainWindow(QMainWindow):
         self.canvas_widget.clear_selection()
 
     def curve_bezier_action(self):
-        pnum, ok_pressed = QInputDialog.getInt(self, "曲线属性设置", "曲线控制点个数: ", 3, 2, 100, 1)
+        pnum, ok_pressed = QInputDialog.getInt(self, "曲线属性设置", "Bezier曲线控制点个数: ", 3, 2, 100, 1)
         if ok_pressed:
             self.canvas_widget.start_draw_curve('Bezier', pnum)
             self.statusBar().showMessage('Bezier算法绘制曲线')
+            self.canvas_widget.clear_selection()
+
+    def curve_b_spline_action(self):
+        pnum, ok_pressed = QInputDialog.getInt(self, "曲线属性设置", "B-spline曲线控制点个数: ", 4, 4, 100, 1)
+        if ok_pressed:
+            self.canvas_widget.start_draw_curve('B-spline', pnum)
+            self.statusBar().showMessage('B-spline算法绘制曲线')
             self.canvas_widget.clear_selection()
 
     def is_valid_selection(self):
