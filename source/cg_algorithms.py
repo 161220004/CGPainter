@@ -142,7 +142,7 @@ def draw_curve(p_list, algorithm):
     p_key = []  # 得到的所有点，需要用直线连接后作为曲线
     if algorithm == 'Bezier':
         t = 0
-        while t < 1:
+        while t < 1.001:
             p = []
             for i in range(p_num):  # 初始化P0点集
                 p.append(p_list[i])
@@ -159,7 +159,6 @@ def draw_curve(p_list, algorithm):
             # 现在，得到了最终的点，p[0]
             p_key.append((int(p[0][0]), int(p[0][1])))
             t += 0.01
-        p_key.append(p_list[p_num - 1])  # 加上最后一个控制点
     elif algorithm == 'B-spline':
         for i in range(p_num - 3):  # 每4个点为一组：[p0, p(n-4)] ~ [p3, p(n-1)]
             p0, p1, p2, p3 = p_list[i], p_list[i + 1], p_list[i + 2], p_list[i + 3]
@@ -174,7 +173,7 @@ def draw_curve(p_list, algorithm):
             b2 = (y0 - 2 * y1 + y2) / 2
             b3 = - (y0 - 3 * y1 + 3 * y2 - y3) / 6
             t = 0
-            while t < 1.005:
+            while t < 1.001:
                 xt = a0 + a1 * t + a2 * t * t + a3 * t * t * t
                 yt = b0 + b1 * t + b2 * t * t + b3 * t * t * t
                 p_key.append((int(xt), int(yt)))
