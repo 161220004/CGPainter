@@ -2,7 +2,10 @@
 # -*- coding:utf-8 -*-
 
 import sys
+import os
 import cg_algorithms as alg
+import numpy as np
+from PIL import Image
 from typing import Optional
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, qApp, QGraphicsScene, QGraphicsView, QGraphicsItem, QStyleOptionGraphicsItem,
@@ -131,6 +134,19 @@ class MyCanvas(QGraphicsView):
         self.temp_vnum = 0
         self.temp_v = 0
         self.updateScene([self.sceneRect()])
+
+    def save_all(self, filename):
+        # 只支持保存 600 * 600 的画布
+        canvas = np.zeros([600, 600, 3], np.uint8)
+        canvas.fill(255)
+        for item in self.item_dict.values():
+            pixels = item.item_pixels
+            for x, y in pixels:
+                if 0 <= x < 600 and 0 <= y < 600:  # 不绘制出界部分
+                    canvas[y, x] = np.array([item.color.red(), item.color.green(), item.color.blue()])
+        output_dir = '../outputs'
+        os.makedirs(output_dir, exist_ok=True)
+        Image.fromarray(canvas).save(os.path.join(output_dir, filename), 'bmp')
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         """ 按下鼠标时的动作 """
@@ -373,7 +389,7 @@ class MyItem(QGraphicsItem):
     def get_rect_dict(self):
         """ 图元编辑锚点 """
         length = 6
-        length_c = 4  # 中心点
+        length_c = 8  # 中心点
         if self.item_type == 'line' or self.item_type == 'polygon' or self.item_type == 'curve':
             # rect_dict 的 0, 1... 分别对应于 p_list的 0, 1...；rect_dict 的 vnum 是中心
             xsum, ysum = 0, 0
@@ -459,6 +475,7 @@ class MainWindow(QMainWindow):
         file_menu = menubar.addMenu('文件')
         set_pen_act = file_menu.addAction('设置画笔')
         reset_canvas_act = file_menu.addAction('重置画布')
+        save_canvas_act = file_menu.addAction('保存画布')
         exit_act = file_menu.addAction('退出')
         draw_menu = menubar.addMenu('绘制')
         line_menu = draw_menu.addMenu('线段')
@@ -484,6 +501,7 @@ class MainWindow(QMainWindow):
         self.list_widget.currentTextChanged.connect(self.canvas_widget.selection_changed)
         set_pen_act.triggered.connect(self.set_pen_action)
         reset_canvas_act.triggered.connect(self.reset_action)
+        save_canvas_act.triggered.connect(self.save_action)
         exit_act.triggered.connect(qApp.quit)
         line_dda_act.triggered.connect(self.line_dda_action)
         line_bresenham_act.triggered.connect(self.line_bresenham_action)
@@ -528,6 +546,15 @@ class MainWindow(QMainWindow):
         self.list_widget.clear()
         self.canvas_widget.reset_all()
         self.item_cnt = 0
+
+    def save_action(self):
+        if self.canvas_widget.status == '' and not self.canvas_widget.is_editing:
+            filename, ok_pressed = QInputDialog.getText(self, "保存", "文件名: ", QLineEdit.Normal, "canvas.bmp")
+            if ok_pressed:
+                self.statusBar().showMessage('当前画布已保存')
+                self.canvas_widget.save_all(filename)
+        else:
+            reply = QMessageBox.warning(self, '注意', '请先进入空闲状态', QMessageBox.Yes, QMessageBox.Yes)
 
     def line_dda_action(self):
         self.canvas_widget.start_draw_line('DDA')
