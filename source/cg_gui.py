@@ -30,8 +30,8 @@ class MyCanvas(QGraphicsView):
         self.temp_algorithm = ''           # 当前绘制的一个图形所采用的算法，随图形的绘制而更新
         self.temp_id = ''                  # 当前绘制的一个图形的Id，随图形的绘制而更新
         self.temp_item = None              # 当前绘制的一个图形图元，随图形的绘制而更新
-        self.temp_poly_vnum = 0            # 当前绘制的如果是多边形，记录顶点数
-        self.temp_poly_v = 0               # 当前绘制的如果是多边形，记录已经确认的顶点数
+        self.temp_vnum = 0                 # 当前绘制的如果是多边形/曲线，记录顶点/控制点数
+        self.temp_v = 0                    # 当前绘制的如果是多边形/曲线，记录已经确认的顶点/控制点数
 
     def start_draw_line(self, algorithm):
         """ 开始绘制直线，更改当前状态为直线绘制中 """
@@ -42,13 +42,21 @@ class MyCanvas(QGraphicsView):
         """ 开始绘制多边形，更改当前状态为多边形绘制中 """
         self.status = 'polygon'
         self.temp_algorithm = algorithm
-        self.temp_poly_vnum = vnum
-        self.temp_poly_v = 0
+        self.temp_vnum = vnum
+        self.temp_v = 0
         self.is_drawing = True
 
     def start_draw_ellipse(self):
         """ 开始绘制椭圆，更改当前状态为椭圆绘制中 """
         self.status = 'ellipse'
+
+    def start_draw_curve(self, algorithm, pnum):
+        """ 开始绘制曲线，更改当前状态为曲线绘制中 """
+        self.status = 'curve'
+        self.temp_algorithm = algorithm
+        self.temp_vnum = pnum
+        self.temp_v = 0
+        self.is_drawing = True
 
     def start_clip(self, algorithm):
         """ 开始裁剪线段 """
@@ -120,8 +128,8 @@ class MyCanvas(QGraphicsView):
         self.temp_algorithm = ''
         self.temp_id = ''
         self.temp_item = None
-        self.temp_poly_vnum = 0
-        self.temp_poly_v = 0
+        self.temp_vnum = 0
+        self.temp_v = 0
         self.updateScene([self.sceneRect()])
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
@@ -161,25 +169,46 @@ class MyCanvas(QGraphicsView):
                 self.scene().addItem(self.temp_item)
             elif self.status == 'polygon':
                 # 多边形绘制状态 --> 确定多边形的一个顶点
-                if self.temp_poly_v == 0:  # 第一个顶点
+                if self.temp_v == 0:  # 第一个顶点
                     self.temp_id = 'Polygon' + str(self.main_window.get_item_num())
                     poly_vs = []
-                    for v in range(self.temp_poly_vnum):
+                    for v in range(self.temp_vnum):
                         poly_vs.append((x, y))
                     self.temp_item = MyItem(self.temp_id, self.status, poly_vs, self.temp_color, self.temp_algorithm)
                     self.scene().addItem(self.temp_item)
                     self.setMouseTracking(True)
-                    self.temp_poly_v += 1
+                    self.temp_v += 1
                 else:  # 其他顶点
-                    self.temp_item.p_list[self.temp_poly_v] = (x, y)
-                    self.temp_poly_v += 1
-                    if self.temp_poly_v >= self.temp_poly_vnum:  # 所有顶点绘制结束
+                    self.temp_item.p_list[self.temp_v] = (x, y)
+                    self.temp_v += 1
+                    if self.temp_v >= self.temp_vnum:  # 所有顶点绘制结束
                         self.item_dict[self.temp_id] = self.temp_item
                         self.list_widget.addItem(self.temp_id)
                         self.setMouseTracking(False)
                         self.is_drawing = False
                         self.status = ''
                         self.main_window.statusBar().showMessage('空闲')
+            elif self.status == 'curve':
+                # 曲线绘制状态 --> 确定曲线的一个控制点
+                if self.temp_v == 0:  # 第一个控制点
+                    self.temp_id = 'Curve' + str(self.main_window.get_item_num())
+                    # 先添加第一个和第二个控制点
+                    self.temp_item = MyItem(self.temp_id, self.status, [(x, y), (x, y)], self.temp_color, self.temp_algorithm)
+                    self.scene().addItem(self.temp_item)
+                    self.setMouseTracking(True)
+                    self.temp_v += 1
+                else:  # 其他控制点
+                    self.temp_item.p_list[self.temp_v] = (x, y)  # 确认当前控制点
+                    self.temp_v += 1
+                    if self.temp_v >= self.temp_vnum:  # 所有控制点绘制结束
+                        self.item_dict[self.temp_id] = self.temp_item
+                        self.list_widget.addItem(self.temp_id)
+                        self.setMouseTracking(False)
+                        self.is_drawing = False
+                        self.status = ''
+                        self.main_window.statusBar().showMessage('空闲')
+                    else:
+                        self.temp_item.p_list.append((x, y))  # 添加下一个控制点
         elif event.button() == Qt.RightButton:
             # 右键：停止绘制并取消一切选择(非编辑模式)
             if not self.is_drawing and not self.is_editing:
@@ -197,9 +226,9 @@ class MyCanvas(QGraphicsView):
         if self.is_editing:  # 移动锚点（编辑模式）
             selected_item = self.item_dict[self.selected_id]
             rect_key = selected_item.edit_rect_key
-            if selected_item.item_type == 'line' or selected_item.item_type == 'polygon':
+            if selected_item.item_type == 'line' or selected_item.item_type == 'polygon' or selected_item.item_type == 'curve':
                 vnum = len(selected_item.p_list)
-                if rect_key < vnum:
+                if 0 <= rect_key < vnum:
                     selected_item.p_list[rect_key] = (x, y)
                 elif rect_key == vnum:
                     dx = x - self.press_pos[0]
@@ -224,8 +253,6 @@ class MyCanvas(QGraphicsView):
                     dx = x - self.press_pos[0]
                     dy = y - self.press_pos[1]
                     selected_item.mov_dis = (dx, dy)
-            elif selected_item.item_type == 'curve':
-                pass
         elif self.status == 'clip':  # 线段裁剪框绘制
             x0, y0 = self.temp_item.p_list[0]
             self.temp_item.p_list[1] = (x0, y)
@@ -233,8 +260,8 @@ class MyCanvas(QGraphicsView):
             self.temp_item.p_list[3] = (x, y0)
         elif self.status == 'line' or self.status == 'ellipse':
             self.temp_item.p_list[1] = (x, y)
-        elif self.status == 'polygon':
-            self.temp_item.p_list[self.temp_poly_v] = (x, y)
+        elif self.status == 'polygon' or self.status == 'curve':
+            self.temp_item.p_list[self.temp_v] = (x, y)
         self.updateScene([self.sceneRect()])
         super().mouseMoveEvent(event)
 
@@ -270,20 +297,25 @@ class MyCanvas(QGraphicsView):
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         """ 一些键盘指令 """
-        if event.key() == Qt.Key_T and QApplication.keyboardModifiers() == Qt.ControlModifier:
-            # Ctrl + T (Win) / Command + T (Mac): 编辑当前选中的图元，编辑模式禁止改变选中的图元
-            if self.status == '' and self.is_valid_selection():
-                self.main_window.statusBar().showMessage('图元编辑： %s  (回车退出编辑模式)' % self.selected_id)
-                self.is_editing = True
-                self.item_dict[self.selected_id].editing = True
-                self.list_widget.setDisabled(True)
-        if self.is_editing and (event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter):
-            # Enter: 停止编辑
-            if self.status == '' and self.is_valid_selection():
-                self.main_window.statusBar().showMessage('图元选择： %s  (Ctrl+T[Win]/Cmd+T[Mac]进入编辑模式)' % self.selected_id)
-                self.is_editing = False
-                self.item_dict[self.selected_id].editing = False
-                self.list_widget.setDisabled(False)
+        if self.is_editing:  # 编辑模式
+            if event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter:
+                # Enter/Return: 停止编辑
+                if self.status == '' and self.is_valid_selection():
+                    self.main_window.statusBar().showMessage('图元选择： %s  (Ctrl+T[Win]/Cmd+T[Mac]进入编辑模式)' % self.selected_id)
+                    self.is_editing = False
+                    self.item_dict[self.selected_id].editing = False
+                    self.list_widget.setDisabled(False)
+        else:  # 非编辑模式
+            if event.key() == Qt.Key_T and QApplication.keyboardModifiers() == Qt.ControlModifier:
+                # Ctrl + T (Win) / Command + T (Mac): 编辑当前选中的图元，编辑模式禁止改变选中的图元
+                if self.status == '' and self.is_valid_selection():
+                    self.main_window.statusBar().showMessage('图元编辑： %s  (回车退出编辑模式)' % self.selected_id)
+                    self.is_editing = True
+                    self.item_dict[self.selected_id].editing = True
+                    self.list_widget.setDisabled(True)
+            elif event.key() == Qt.Key_Delete or event.key() == Qt.Key_Backspace:
+                # Delete/Backspace: 删除图元（非编辑模式）
+                self.delete_selected_item()
         self.updateScene([self.sceneRect()])
         super().keyPressEvent(event)
 
@@ -331,7 +363,7 @@ class MyItem(QGraphicsItem):
         elif self.item_type == 'ellipse':
             self.item_pixels = alg.draw_ellipse(p_list_real)
         elif self.item_type == 'curve':
-            pass
+            self.item_pixels = alg.draw_curve(p_list_real, self.algorithm)
         for p in self.item_pixels:
             painter.setPen(self.color)
             painter.drawPoint(*p)
@@ -356,7 +388,8 @@ class MyItem(QGraphicsItem):
     def get_rect_dict(self):
         """ 图元编辑锚点 """
         length = 6
-        if self.item_type == 'line' or self.item_type == 'polygon':
+        length_c = 4  # 中心点
+        if self.item_type == 'line' or self.item_type == 'polygon' or self.item_type == 'curve':
             # rect_dict 的 0, 1... 分别对应于 p_list的 0, 1...；rect_dict 的 vnum 是中心
             xsum, ysum = 0, 0
             vnum = len(self.p_list)
@@ -366,7 +399,7 @@ class MyItem(QGraphicsItem):
                 xsum += x
                 ysum += y
                 self.rect_dict[v] = QRectF(x - length/2, y - length/2, length, length)
-            self.rect_dict[vnum] = QRectF(xsum/vnum - length/2, ysum/vnum - length/2, length, length)
+            self.rect_dict[vnum] = QRectF(xsum/vnum - length_c/2, ysum/vnum - length_c/2, length_c, length_c)
         elif self.item_type == 'ellipse':
             x0 = self.p_list[0][0] + self.mov_dis[0]
             y0 = self.p_list[0][1] + self.mov_dis[1]
@@ -377,9 +410,7 @@ class MyItem(QGraphicsItem):
             self.rect_dict[1] = QRectF(x0 - length/2, y1 - length/2, length, length)
             self.rect_dict[2] = QRectF(x1 - length/2, y1 - length/2, length, length)
             self.rect_dict[3] = QRectF(x1 - length/2, y0 - length/2, length, length)
-            self.rect_dict[4] = QRectF((x0 + x1 - length) / 2, (y0 + y1 - length) / 2, length, length)
-        elif self.item_type == 'curve':
-            pass
+            self.rect_dict[4] = QRectF((x0 + x1 - length_c) / 2, (y0 + y1 - length_c) / 2, length_c, length_c)
 
     def set_rect_key(self, press_pos):
         for key, rect in self.rect_dict.items():
@@ -407,7 +438,7 @@ class MyItem(QGraphicsItem):
             w = max(x0, x1) - x
             h = max(y0, y1) - y
             return QRectF(x - 1, y - 1, w + 2, h + 2)
-        elif self.item_type == 'polygon':
+        elif self.item_type == 'polygon' or self.item_type == 'curve':
             xmax, ymax = self.p_list[0]
             xmin, ymin = self.p_list[0]
             for (x, y) in self.p_list:
@@ -416,8 +447,6 @@ class MyItem(QGraphicsItem):
                xmin = min(x, xmin)
                ymin = min(y, ymin)
             return QRectF(xmin - 1, ymin - 1, xmax - xmin + 2, ymax - ymin + 2)
-        elif self.item_type == 'curve':
-            pass
 
 
 class MainWindow(QMainWindow):
@@ -476,6 +505,7 @@ class MainWindow(QMainWindow):
         polygon_dda_act.triggered.connect(self.polygon_dda_action)
         polygon_bresenham_act.triggered.connect(self.polygon_bresenham_action)
         ellipse_act.triggered.connect(self.ellipse_action)
+        curve_bezier_act.triggered.connect(self.curve_bezier_action)
         translate_act.triggered.connect(self.translate_action)
         rotate_act.triggered.connect(self.rotate_action)
         scale_act.triggered.connect(self.scale_action)
@@ -541,6 +571,13 @@ class MainWindow(QMainWindow):
         self.canvas_widget.start_draw_ellipse()
         self.statusBar().showMessage('中点圆生成算法绘制椭圆')
         self.canvas_widget.clear_selection()
+
+    def curve_bezier_action(self):
+        pnum, ok_pressed = QInputDialog.getInt(self, "曲线属性设置", "曲线控制点个数: ", 3, 2, 100, 1)
+        if ok_pressed:
+            self.canvas_widget.start_draw_curve('Bezier', pnum)
+            self.statusBar().showMessage('Bezier算法绘制曲线')
+            self.canvas_widget.clear_selection()
 
     def is_valid_selection(self):
         return self.canvas_widget.selected_id != '' and self.canvas_widget.item_dict.__contains__(self.canvas_widget.selected_id)

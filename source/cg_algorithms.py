@@ -140,7 +140,7 @@ def draw_curve(p_list, algorithm):
     if algorithm == 'Bezier':
         p_key = []  # 得到的所有点，需要用直线连接后作为曲线
         t = 0
-        while t <= 1:
+        while t < 1:
             p = []
             for i in range(p_num):  # 初始化P0点集
                 p.append(p_list[i])
@@ -157,6 +157,7 @@ def draw_curve(p_list, algorithm):
             # 现在，得到了最终的点，p[0]
             p_key.append((int(p[0][0]), int(p[0][1])))
             t += 0.01
+        p_key.append(p_list[p_num - 1])  # 加上最后一个控制点
         # 开始连接
         for i in range(len(p_key) - 1):
             line = draw_line([p_key[i], p_key[i + 1]], 'Bresenham')
