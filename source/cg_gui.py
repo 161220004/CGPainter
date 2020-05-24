@@ -93,7 +93,7 @@ class MyCanvas(QGraphicsView):
     def clear_selection(self):
         """ 清空所选图元 """
         if self.is_valid_selection():
-            self.list_widget.clearSelection()
+            self.list_widget.selectionModel().clear()
             self.item_dict[self.selected_id].selected = False
             self.item_dict[self.selected_id].update()
             self.selected_id = ''
@@ -101,7 +101,7 @@ class MyCanvas(QGraphicsView):
 
     def selection_changed(self, selected):
         """ 更改所选图元 """
-        if selected != '' and self.item_dict.__contains__(selected):
+        if selected != '' and selected != self.selected_id and self.item_dict.__contains__(selected):
             self.main_window.statusBar().showMessage('图元选择： %s  (Ctrl+T[Win]/Cmd+T[Mac]进入编辑模式)' % selected)
             if self.is_valid_selection():
                 self.item_dict[self.selected_id].selected = False
@@ -118,6 +118,7 @@ class MyCanvas(QGraphicsView):
             self.scene().removeItem(selected_item)
             selected_row = self.list_widget.selectedItems()[0]
             self.list_widget.takeItem(self.list_widget.row(selected_row))
+            self.list_widget.selectionModel().clear()
             self.clear_selection()
 
     def reset_all(self):
@@ -498,7 +499,7 @@ class MainWindow(QMainWindow):
         delete_act = edit_menu.addAction('删除')
 
         # 连接信号和槽函数
-        self.list_widget.currentTextChanged.connect(self.canvas_widget.selection_changed)
+        self.list_widget.itemClicked.connect(self.item_selected)
         set_pen_act.triggered.connect(self.set_pen_action)
         reset_canvas_act.triggered.connect(self.reset_action)
         save_canvas_act.triggered.connect(self.save_action)
@@ -534,6 +535,9 @@ class MainWindow(QMainWindow):
     def get_item_num(self):
         self.item_cnt = self.list_widget.count()
         return self.item_cnt
+
+    def item_selected(self, item):
+        self.canvas_widget.selection_changed(item.text())
 
     def set_pen_action(self):
         if not self.canvas_widget.is_drawing:
