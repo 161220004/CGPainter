@@ -171,6 +171,7 @@ class MyCanvas(QGraphicsView):
             elif self.status == 'clip':
                 # 线段裁剪状态 --> 画一个矩形裁剪框
                 self.temp_item = MyItem('', 'polygon', [(x, y), (x, y), (x, y), (x, y)], QColor(255, 0, 0), 'DDA')
+                self.temp_item.poly_closed = True
                 self.scene().addItem(self.temp_item)
             elif self.status == 'line':
                 # 直线绘制状态 --> 选定一个端点
