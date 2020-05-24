@@ -35,6 +35,11 @@ class MyCanvas(QGraphicsView):
         self.temp_item = None              # 当前绘制的一个图形图元，随图形的绘制而更新
         self.temp_vnum = 0                 # 当前绘制的如果是多边形/曲线，记录顶点/控制点数
         self.temp_v = 0                    # 当前绘制的如果是多边形/曲线，记录已经确认的顶点/控制点数
+        self.item_no = 0                   # 图形的序号
+
+    def get_item_no(self):
+        self.item_no += 1
+        return self.item_no
 
     def start_draw_line(self, algorithm):
         """ 开始绘制直线，更改当前状态为直线绘制中 """
@@ -120,6 +125,7 @@ class MyCanvas(QGraphicsView):
             self.list_widget.takeItem(self.list_widget.row(selected_row))
             self.list_widget.selectionModel().clear()
             self.clear_selection()
+            self.main_window.statusBar().showMessage('空闲')
 
     def reset_all(self):
         self.clear_selection()
@@ -134,6 +140,7 @@ class MyCanvas(QGraphicsView):
         self.temp_item = None
         self.temp_vnum = 0
         self.temp_v = 0
+        self.item_no = 0
         self.updateScene([self.sceneRect()])
 
     def save_all(self, filename):
@@ -165,7 +172,7 @@ class MyCanvas(QGraphicsView):
                     for item in self.item_dict.values():
                         if item.judge_select((x, y)):
                             select_items = self.list_widget.findItems(item.id, Qt.MatchExactly)
-                            if select_items:
+                            if select_items and len(select_items) > 0:
                                 self.list_widget.setCurrentItem(select_items[0])
                                 self.selection_changed(item.id)
             elif self.status == 'clip':
@@ -176,22 +183,22 @@ class MyCanvas(QGraphicsView):
             elif self.status == 'line':
                 # 直线绘制状态 --> 选定一个端点
                 self.is_drawing = True
-                self.temp_id = 'Line' + str(self.main_window.get_item_num())
+                self.temp_id = 'Line' + str(self.get_item_no())
                 self.temp_item = MyItem(self.temp_id, self.status, [(x, y), (x, y)], self.temp_color, self.temp_algorithm)
                 self.scene().addItem(self.temp_item)
             elif self.status == 'ellipse':
                 # 椭圆绘制状态 --> 选定长方形边界的左上角/右下角
                 self.is_drawing = True
-                self.temp_id = 'Ellipse' + str(self.main_window.get_item_num())
+                self.temp_id = 'Ellipse' + str(self.get_item_no())
                 self.temp_item = MyItem(self.temp_id, self.status, [(x, y), (x, y)], self.temp_color)
                 self.scene().addItem(self.temp_item)
             elif self.status == 'polygon' or self.status == 'curve':
                 # 多边形绘制状态 --> 确定多边形的一个顶点 / 曲线绘制状态 --> 确定曲线的一个控制点
                 if self.temp_v == 0:  # 第一个顶点/控制点
                     if self.status == 'polygon':
-                        self.temp_id = 'Polygon' + str(self.main_window.get_item_num())
+                        self.temp_id = 'Polygon' + str(self.get_item_no())
                     else:
-                        self.temp_id = 'Curve' + str(self.main_window.get_item_num())
+                        self.temp_id = 'Curve' + str(self.get_item_no())
                     # 先添加第一个和第二个顶点/控制点
                     self.temp_item = MyItem(self.temp_id, self.status, [(x, y), (x, y)], self.temp_color, self.temp_algorithm)
                     self.scene().addItem(self.temp_item)
@@ -202,7 +209,10 @@ class MyCanvas(QGraphicsView):
                     self.temp_v += 1
                     if self.temp_v >= self.temp_vnum:  # 所有顶点/控制点绘制结束
                         self.item_dict[self.temp_id] = self.temp_item
-                        self.list_widget.addItem(self.temp_id)
+                        # 如果列表中没有重复项，加入
+                        same_items = self.list_widget.findItems(self.temp_id, Qt.MatchExactly)
+                        if not same_items or len(same_items) == 0:
+                            self.list_widget.addItem(self.temp_id)
                         self.setMouseTracking(False)
                         self.is_drawing = False
                         self.status = ''
@@ -292,7 +302,10 @@ class MyCanvas(QGraphicsView):
             elif self.status == 'line' or self.status == 'ellipse':
                 # 完成一个直线/椭圆的绘制
                 self.item_dict[self.temp_id] = self.temp_item
-                self.list_widget.addItem(self.temp_id)
+                # 如果列表中没有重复项，加入
+                same_items = self.list_widget.findItems(self.temp_id, Qt.MatchExactly)
+                if not same_items or len(same_items) == 0:
+                    self.list_widget.addItem(self.temp_id)
                 self.is_drawing = False
         self.updateScene([self.sceneRect()])
         super().mouseReleaseEvent(event)
@@ -458,7 +471,6 @@ class MainWindow(QMainWindow):
     """
     def __init__(self):
         super().__init__()
-        self.item_cnt = 0
 
         # 使用QListWidget来记录已有的图元，并用于选择图元
         self.list_widget = QListWidget(self)
@@ -533,10 +545,6 @@ class MainWindow(QMainWindow):
         # 其他
         self.setAttribute(Qt.WA_DeleteOnClose)  # 关闭时删除对话框
 
-    def get_item_num(self):
-        self.item_cnt = self.list_widget.count()
-        return self.item_cnt
-
     def item_selected(self, item):
         self.canvas_widget.selection_changed(item.text())
 
@@ -550,7 +558,6 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage('空闲')
         self.list_widget.clear()
         self.canvas_widget.reset_all()
-        self.item_cnt = 0
 
     def save_action(self):
         if self.canvas_widget.status == '' and not self.canvas_widget.is_editing:
@@ -562,47 +569,68 @@ class MainWindow(QMainWindow):
             reply = QMessageBox.warning(self, '注意', '请先进入空闲状态', QMessageBox.Yes, QMessageBox.Yes)
 
     def line_dda_action(self):
-        self.canvas_widget.start_draw_line('DDA')
-        self.statusBar().showMessage('DDA算法绘制线段')
-        self.canvas_widget.clear_selection()
+        if not self.canvas_widget.is_editing:
+            self.canvas_widget.start_draw_line('DDA')
+            self.statusBar().showMessage('DDA算法绘制线段')
+            self.canvas_widget.clear_selection()
+        else:
+            reply = QMessageBox.warning(self, '注意', '请先回车退出编辑模式', QMessageBox.Yes, QMessageBox.Yes)
 
     def line_bresenham_action(self):
-        self.canvas_widget.start_draw_line('Bresenham')
-        self.statusBar().showMessage('Bresenham算法绘制线段')
-        self.canvas_widget.clear_selection()
+        if not self.canvas_widget.is_editing:
+            self.canvas_widget.start_draw_line('Bresenham')
+            self.statusBar().showMessage('Bresenham算法绘制线段')
+            self.canvas_widget.clear_selection()
+        else:
+            reply = QMessageBox.warning(self, '注意', '请先回车退出编辑模式', QMessageBox.Yes, QMessageBox.Yes)
 
     def polygon_dda_action(self):
-        vnum, ok_pressed = QInputDialog.getInt(self, "多边形属性设置", "多边形边数: ", 3, 3, 100, 1)
-        if ok_pressed:
-            self.canvas_widget.start_draw_polygon('DDA', vnum)
-            self.statusBar().showMessage('DDA算法绘制多边形')
-            self.canvas_widget.clear_selection()
+        if not self.canvas_widget.is_editing:
+            vnum, ok_pressed = QInputDialog.getInt(self, "多边形属性设置", "多边形边数: ", 3, 3, 100, 1)
+            if ok_pressed:
+                self.canvas_widget.start_draw_polygon('DDA', vnum)
+                self.statusBar().showMessage('DDA算法绘制多边形')
+                self.canvas_widget.clear_selection()
+        else:
+            reply = QMessageBox.warning(self, '注意', '请先回车退出编辑模式', QMessageBox.Yes, QMessageBox.Yes)
 
     def polygon_bresenham_action(self):
-        vnum, ok_pressed = QInputDialog.getInt(self, "多边形属性设置", "多边形边数: ", 3, 3, 100, 1)
-        if ok_pressed:
-            self.canvas_widget.start_draw_polygon('Bresenham', vnum)
-            self.statusBar().showMessage('Bresenham算法绘制多边形')
-            self.canvas_widget.clear_selection()
+        if not self.canvas_widget.is_editing:
+            vnum, ok_pressed = QInputDialog.getInt(self, "多边形属性设置", "多边形边数: ", 3, 3, 100, 1)
+            if ok_pressed:
+                self.canvas_widget.start_draw_polygon('Bresenham', vnum)
+                self.statusBar().showMessage('Bresenham算法绘制多边形')
+                self.canvas_widget.clear_selection()
+        else:
+            reply = QMessageBox.warning(self, '注意', '请先回车退出编辑模式', QMessageBox.Yes, QMessageBox.Yes)
 
     def ellipse_action(self):
-        self.canvas_widget.start_draw_ellipse()
-        self.statusBar().showMessage('中点圆生成算法绘制椭圆')
-        self.canvas_widget.clear_selection()
+        if not self.canvas_widget.is_editing:
+            self.canvas_widget.start_draw_ellipse()
+            self.statusBar().showMessage('中点圆生成算法绘制椭圆')
+            self.canvas_widget.clear_selection()
+        else:
+            reply = QMessageBox.warning(self, '注意', '请先回车退出编辑模式', QMessageBox.Yes, QMessageBox.Yes)
 
     def curve_bezier_action(self):
-        pnum, ok_pressed = QInputDialog.getInt(self, "曲线属性设置", "Bezier曲线控制点个数: ", 3, 2, 100, 1)
-        if ok_pressed:
-            self.canvas_widget.start_draw_curve('Bezier', pnum)
-            self.statusBar().showMessage('Bezier算法绘制曲线')
-            self.canvas_widget.clear_selection()
+        if not self.canvas_widget.is_editing:
+            pnum, ok_pressed = QInputDialog.getInt(self, "曲线属性设置", "Bezier曲线控制点个数: ", 3, 2, 100, 1)
+            if ok_pressed:
+                self.canvas_widget.start_draw_curve('Bezier', pnum)
+                self.statusBar().showMessage('Bezier算法绘制曲线')
+                self.canvas_widget.clear_selection()
+        else:
+            reply = QMessageBox.warning(self, '注意', '请先回车退出编辑模式', QMessageBox.Yes, QMessageBox.Yes)
 
     def curve_b_spline_action(self):
-        pnum, ok_pressed = QInputDialog.getInt(self, "曲线属性设置", "B-spline曲线控制点个数: ", 4, 4, 100, 1)
-        if ok_pressed:
-            self.canvas_widget.start_draw_curve('B-spline', pnum)
-            self.statusBar().showMessage('B-spline算法绘制曲线')
-            self.canvas_widget.clear_selection()
+        if not self.canvas_widget.is_editing:
+            pnum, ok_pressed = QInputDialog.getInt(self, "曲线属性设置", "B-spline曲线控制点个数: ", 4, 4, 100, 1)
+            if ok_pressed:
+                self.canvas_widget.start_draw_curve('B-spline', pnum)
+                self.statusBar().showMessage('B-spline算法绘制曲线')
+                self.canvas_widget.clear_selection()
+        else:
+            reply = QMessageBox.warning(self, '注意', '请先回车退出编辑模式', QMessageBox.Yes, QMessageBox.Yes)
 
     def is_valid_selection(self):
         return self.canvas_widget.selected_id != '' and self.canvas_widget.item_dict.__contains__(self.canvas_widget.selected_id)
